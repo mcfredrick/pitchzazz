@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["crates/pitch-core", "crates/pitch-cli"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+
+[profile.release]
+# Real-time audio code benefits from aggressive optimization; lto trades
+# build time for a flatter, more predictable call graph in the hot path.
+lto = true
+codegen-units = 1

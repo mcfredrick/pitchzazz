@@ -1,0 +1,18 @@
+[package]
+name = "pitchzazz"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Real-time pitch correction over your default audio input/output, lock-free from callback to callback."
+
+[[bin]]
+name = "pitchzazz"
+path = "src/main.rs"
+
+[dependencies]
+pitch-core = { path = "../pitch-core" }
+cpal = "0.15"
+ringbuf = "0.3"
+clap = { version = "4", features = ["derive"] }
+rust-music-theory = "0.2"
+anyhow = "1"
