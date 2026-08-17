@@ -408,6 +408,43 @@ make the hot-swap and the performance comparison visible and demoable live.
 
 ## Phase 5 — polish
 
+**Algorithm playground, started 2026-08-17.** Reskin (below) done, then
+picked up the "make this a playground for pitch-manipulation algorithms"
+direction explicitly: scoped to TD-PSOLA first (the concrete lowest-
+latency claim, most directly tied to the JD's real-time-systems angle),
+C++ only (the Rust/C++ parity story is already proven by the existing two
+engines — a third algorithm doesn't need to re-prove it, per this file's
+own prioritization criteria). LPC-based formant shifting and granular
+shifting (the timbre-changing/creative-tool directions) are scoped but
+not started — natural next additions to the same registry, not attempted
+in this pass.
+
+**TD-PSOLA, done, 2026-08-17.** `PSOLACorrectorEngine` (id `psola-cpp`,
+display name "TD-PSOLA (C++)") — one more `PitchEngine` registry entry,
+no changes anywhere else (UI, worker, hot-swap), exactly the extensibility
+the registry was built for. Reuses the existing `PitchDetector` and
+`Scale` quantization unchanged; only the shift stage is new
+(`PSOLAPitchShifter`, a separate class from `Corrector`/`PitchShifter`
+rather than a template — see `PSOLACorrector.h`'s doc for why duplication
+was the safer call at N=2 shifters). All new tests pass
+(`tests/DSP/PSOLAPitchShifterTests.cpp`: energy preservation, a frequency-
+round-trip correctness check via re-detection, silence handling, and a
+latency-formula assertion), PluginVal and `auval` both pass on the
+rebuilt AU/VST3.
+
+Real measured latency win — see `docs/PERFORMANCE_LOG.md`'s dated entry
+for the full numbers and the genuinely-real-not-just-derived-latency
+verification: ~28% less than the phase vocoder at 44.1kHz, ~22% less at
+48kHz, and (a real property of the algorithm, not a limitation of this
+implementation) constant in milliseconds across sample rates unlike the
+phase vocoder's sample-count-based window. Finding this number's real
+value required fixing a genuine floating-point robustness bug in the
+grain-read-position math, found via direct instrumentation after an
+initial measurement looked like an unexplained overshoot — full story in
+`docs/FINDINGS.md` #18, worth reading for the "increasing a safety margin
+didn't change the size of the gap, and that itself was the diagnostic
+clue" narrative.
+
 - Note-matching refinement: handle edge cases beyond the current nearest-
   semitone search (e.g. weighting toward the previous detected note to
   reduce warble on sustained notes near a scale boundary).
@@ -484,11 +521,12 @@ make the hot-swap and the performance comparison visible and demoable live.
   crossfade progress, detected-pitch history) for developer show-and-tell
   purposes. Explicitly not a priority right now, per project direction —
   noted so it doesn't get lost, not queued.
-- **Visual redesign, added 2026-08-17**: replace JUCE's default look with
-  a real, deliberate visual identity — current UI is functional-only,
-  built to prove the architecture, not to look finished. Quick to do
-  whenever it's prioritized (LookAndFeel/theming, not a structural
-  change), just not done yet.
+- **Visual redesign, done 2026-08-17**: replaced JUCE's default grey
+  look and feel with a dark-background/neon-accent theme
+  (`Source/PitchzazzLookAndFeel.h`) — custom `LookAndFeel_V4` colour
+  scheme plus rounded/neon-outlined combo boxes and an LED-style bypass
+  toggle, each performance meter colour-coded from the same shared
+  palette. Styling-only, no layout/behavior changes to anything below.
 
 ## Presentation walkthrough tooling
 

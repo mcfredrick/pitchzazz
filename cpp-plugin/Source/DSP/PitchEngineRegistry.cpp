@@ -1,5 +1,6 @@
 #include "PitchEngineRegistry.h"
 #include "NativeCorrectorEngine.h"
+#include "PSOLACorrectorEngine.h"
 #include "RustCorrectorEngine.h"
 
 namespace pitchzazz
@@ -22,6 +23,14 @@ const std::vector<EngineDescriptor>& availableEngines()
             [] (const EngineConfig& config) -> std::unique_ptr<PitchEngine>
             {
                 return std::make_unique<RustCorrectorEngine> (config);
+            },
+        },
+        {
+            "psola-cpp",
+            "TD-PSOLA (C++)",
+            [] (const EngineConfig& config) -> std::unique_ptr<PitchEngine>
+            {
+                return std::make_unique<PSOLACorrectorEngine> (config);
             },
         },
     };

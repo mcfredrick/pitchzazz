@@ -381,6 +381,10 @@ target_sources(${PROJECT_NAME} PRIVATE
     Source/DSP/PitchShifter.h
     Source/DSP/Corrector.cpp
     Source/DSP/Corrector.h
+    Source/DSP/PSOLAPitchShifter.cpp
+    Source/DSP/PSOLAPitchShifter.h
+    Source/DSP/PSOLACorrector.cpp
+    Source/DSP/PSOLACorrector.h
     Source/DSP/CorrectorWorker.cpp
     Source/DSP/CorrectorWorker.h
     Source/DSP/PitchEngine.h
@@ -388,6 +392,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     Source/DSP/NativeCorrectorEngine.h
     Source/DSP/RustCorrectorEngine.cpp
     Source/DSP/RustCorrectorEngine.h
+    Source/DSP/PSOLACorrectorEngine.cpp
+    Source/DSP/PSOLACorrectorEngine.h
     Source/DSP/PitchEngineRegistry.cpp
     Source/DSP/PitchEngineRegistry.h
 )

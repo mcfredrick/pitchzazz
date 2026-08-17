@@ -451,3 +451,68 @@ settings/window-size tradeoff similar in kind to this project's own
 "content-aware window size" idea (`docs/ROADMAP.md` Phase 5) — not
 confirmed, but a more consistent explanation for a same-plugin, no-restart
 toggle than swapping the underlying method entirely.
+
+---
+
+## 2026-08-17 — TD-PSOLA engine: measured latency vs. the phase vocoder
+
+Built a third `PitchEngine` (`PSOLACorrectorEngine`, id `psola-cpp`) — the
+algorithm-family swap flagged as a lever in the SOTA-comparison entry
+above, finally acted on rather than just noted. Time-domain pitch-
+synchronous overlap-add: pulls a ~2-period Hann-windowed grain at each of
+a series of pitch marks and overlap-adds it back at a *different*
+spacing (closer for pitch up, farther for pitch down) — grain spacing
+carries perceived pitch, grain width (fixed at the original period)
+preserves the spectral envelope. C++ only, not ported to Rust (per
+project direction — the Rust/C++ parity story is already proven by the
+existing two engines, a third algorithm doesn't need to re-prove it).
+
+**Latency is pitch-dependent by construction, unlike the phase vocoder's
+fixed window** — the existing `LatencyProbe.cpp` (impulse-peak) doesn't
+work here at all: an impulse has no meaningful detected period, so it
+wouldn't exercise this engine's actual mark-firing behavior. Built a
+dedicated probe (`benchmarks/PSOLALatencyProbe.cpp`, onset-detection
+based) instead. `getLatencySamples()` itself is a **fixed** worst-case
+number (2 pitch periods at a 60Hz floor — see `PSOLAPitchShifter.h`'s doc
+for why fixed, not adaptive: a host needs one number, not "it varies"),
+sized once and used regardless of what's actually playing.
+
+**Measured** (matches the derivation exactly, confirmed after fixing a
+real bug along the way — see below and `docs/FINDINGS.md` #18):
+
+| Sample rate | PSOLA (worst-case, measured) | Phase vocoder (measured, `PERFORMANCE_LOG`'s earlier entry) | Reduction |
+|---|---|---|---|
+| 44.1kHz | 1470 samples / 33.3ms | 2048 samples / 46.4ms | ~28% |
+| 48kHz | 1600 samples / 33.3ms | 2048 samples / 42.7ms | ~22% |
+
+Notable: PSOLA's latency is **constant in milliseconds across sample
+rates** (33.3ms at both 44.1kHz and 48kHz) — it's a period-*count* bound
+(2 periods at a fixed-Hz floor), not a sample-*count* bound, so it scales
+with sample rate exactly enough to cancel out. The phase vocoder's
+sample-count-based window doesn't have this property (its ms figure
+varies by rate, per the nearest-power-of-two rounding entry above). A
+real, honest win — meaningful, not dramatic: roughly a quarter less
+latency, not the order-of-magnitude gap to genuine sub-10ms hardware-DSP
+tiers (still the same different-league comparison the SOTA entry already
+covers).
+
+**The bug, briefly** (full story in `docs/FINDINGS.md` #18): the first
+version of this measurement showed `48kHz/220Hz` overshooting the
+derived latency bound by ~220 samples while three other tested
+combinations matched almost exactly — initially misread as expected
+overlap-add onset smoothing (a real phenomenon, just not what was
+actually happening here). Increasing the safety margin (2x → 3x → 4x
+`maxPeriodSamples`) left the ~220-sample gap completely unchanged in
+size, which was the actual tell that it wasn't a margin problem. Direct
+instrumentation (a temporary mark-firing trace, compiled and run
+standalone) found the real cause: `placeGrainAt`'s `std::floor()`-based
+read-position calculation, applied to a value that *should* land exactly
+on an integer multiple of the period but occasionally sat a few ULPs
+below it due to floating-point accumulation from repeated addition —
+flooring `17.999999997` gives `17`, not `18`, silently reading an entire
+extra period of stale content. A `+1e-6` epsilon before the `floor()`
+fixed it; latency then matched the derived bound exactly across every
+tested combination, no padding needed. Worth remembering for future
+work in this class of algorithm: "increasing a safety margin doesn't
+change the size of the discrepancy" is itself diagnostic — it means the
+bug isn't in the margin.
