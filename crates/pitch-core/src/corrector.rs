@@ -17,11 +17,23 @@ const CLARITY_THRESHOLD: f32 = 0.1;
 // stage alone consistently exceeding the entire real-time budget
 // regardless of input content — a fixed cost, not content-dependent, which
 // pointed at this parameter rather than the algorithm's input-dependent
-// behavior. Dropping to 8 brought most blocks comfortably under budget
-// (~4x reduction in shift-stage cost, matching the 32/8 ratio). See the
-// log for the full before/after data and the still-open tail-latency
-// question before changing this again.
-const OVER_SAMPLING: usize = 8;
+// behavior. Dropped to 8 first, which brought most blocks comfortably
+// under budget (~4x reduction in shift-stage cost, matching the 32/8
+// ratio) — but that measurement was against a debug build. Re-measured
+// against release-build costs (docs/PERFORMANCE_LOG.md's "OVER_SAMPLING
+// re-evaluated" entry): cost scales ~linearly with this parameter and
+// stays cheap at every value tested (even 64 is under 10% of budget), and
+// — confirmed experimentally, not assumed — it has zero effect on
+// pipeline latency (only the analysis window size does that, which this
+// parameter doesn't touch). Raised to 16 on that basis: real headroom to
+// spare for phase-vocoder reconstruction quality (this controls STFT
+// overlap, which affects instantaneous-frequency estimation accuracy) at
+// no latency cost. Not raised further than that — the real ceiling here
+// is diminishing quality returns past some point, not affordability, and
+// that needs a listening test this project doesn't have tooling for, not
+// a headroom calculation. The still-open tail-latency question from the
+// original debug-build profiling remains unresolved by this change.
+const OVER_SAMPLING: usize = 16;
 
 /// Standard equal-temperament Hz -> fractional MIDI note number, A4 = 69 = 440Hz.
 pub fn hz_to_midi(freq_hz: f32) -> f32 {
@@ -78,6 +90,7 @@ pub struct PitchCorrector {
     shifter: PitchShifter,
     block_size: usize,
     scale: Scale,
+    latency_samples: usize,
 }
 
 impl PitchCorrector {
@@ -89,16 +102,32 @@ impl PitchCorrector {
     /// still expected to keep up with real-time audio.
     pub fn new(block_size: usize, sample_rate: usize, window_size_ms: usize, scale: Scale) -> Self {
         let padding = block_size / 2;
+        // The `pitch_shift` crate doesn't expose its internal frame_size
+        // publicly, so this replicates its exact formula
+        // (~/.cargo/registry/.../pitch_shift-1.0.0/src/lib.rs's
+        // `PitchShifter::new`) rather than leaving latency unknowable.
+        // Confirmed by measurement, not just formula, to be this
+        // corrector's entire algorithmic latency — see
+        // docs/PERFORMANCE_LOG.md's "Measured pipeline latency" entry.
+        let mut latency_samples = sample_rate * window_size_ms / 1000;
+        latency_samples += latency_samples % 2;
         Self {
             detector: McLeodDetector::new(block_size, padding),
             shifter: PitchShifter::new(window_size_ms, sample_rate),
             block_size,
             scale,
+            latency_samples,
         }
     }
 
     pub fn set_scale(&mut self, scale: Scale) {
         self.scale = scale;
+    }
+
+    /// Algorithmic pipeline latency, in samples — see `latency_samples`'s
+    /// computation in `new` for provenance.
+    pub fn latency_samples(&self) -> usize {
+        self.latency_samples
     }
 
     /// `samples.len()` must equal the `block_size` passed to [`Self::new`].

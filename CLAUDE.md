@@ -9,7 +9,9 @@ documented with *why*, not just implemented.
 
 Read `docs/ARCHITECTURE.md` before touching `pitch-cli/src/main.rs`. Read
 `docs/ROADMAP.md` before deciding what to work on next — it has an explicit
-"immediate next task."
+"immediate next task" and, as of 2026-08-17, a "Prioritization criteria"
+section tying roadmap priority to a specific target job description.
+Weigh new work against that section before adding it to a phase.
 
 ## Current status (last updated 2026-08-17)
 
@@ -79,6 +81,18 @@ rationale in `docs/ARCHITECTURE.md`.
    piece of "software performance optimization" and "excited about data"
    evidence in this repo — treat maintaining it as part of the work, not
    an afterthought to do once at the end.
+7. **Any time you find and fix a real bug — correctness, toolchain,
+   scaffolding, real-time-safety/lifecycle, anything — add a row to
+   `docs/FINDINGS.md`'s quick-reference table** (bug, what found it, root
+   cause, fix) at the same time you fix it, not retroactively at the end
+   of a session. Include what tool/test/validation surfaced it and
+   whether other validation you'd already run had missed it — that
+   cross-tool-coverage angle (e.g. PluginVal missing something `auval`
+   caught) is itself part of the evidence this repo is trying to build.
+   The full narrative stays in whichever doc already owns that area
+   (`ARCHITECTURE.md`, `PERFORMANCE_LOG.md`, `ROADMAP.md`'s dated
+   checkpoints) — `FINDINGS.md` is the presentation-ready index across
+   all of them, not a replacement for any.
 
 ## Key files
 
@@ -89,6 +103,9 @@ rationale in `docs/ARCHITECTURE.md`.
 | `crates/pitch-cli/src/main.rs` | All real-time audio plumbing: cpal streams, lock-free ring buffers, worker thread. Start here to understand the concurrency architecture; the module doc comment is long on purpose. |
 | `docs/ARCHITECTURE.md` | The real-time-safety design rationale: the original prototype's three concurrency bugs and their fixes, the dependency audit, block-size/latency design. |
 | `docs/PERFORMANCE_LOG.md` | Dated, append-only profiling journal: findings, hypotheses, data, fixes, in the order they happened. Update it whenever you do performance work — see rule 6 above. |
+| `docs/FINDINGS.md` | Presentation-ready index of every bug found (both engines, toolchain, scaffolding) — what found it, root cause, fix, and what other validation had missed it. Update it whenever you find and fix a real bug — see rule 7 above. |
+| `docs/COMPARISON.md` | The Phase 2/3 compare-and-contrast writeup: what stayed identical vs. what had to diverge between the Rust and C++/JUCE engines and why, the controlled (build-profile-matched) performance comparison, and the "where we'd spend time next, how the data justifies it" section. |
+| `docs/TESTING.md` | Testing-methodology writeup for the demo: the "manual listening → automated invariant" reframe, each already-built test category with what it actually catches (with real bug references), and the planned (not yet built) hot-swap dropout-detection methodology. Update the "planned" section once that test is actually built, rather than leaving it stale. |
 | `docs/ROADMAP.md` | Phased plan (Phase 0 prototype history through Phase 5 polish), plus a note on building a guided code-tour walkthrough for the actual presentation. |
 
 ## Build / test / run

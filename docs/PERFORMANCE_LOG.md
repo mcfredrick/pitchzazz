@@ -171,3 +171,283 @@ this can be stated as a number in the presentation rather than an estimate.
 - [Phase Vocoder Implementation with FLWT and TD-PSOLA — Stanford EE264](https://web.stanford.edu/class/ee264/projects/EE264_w2015_final_project_kong.pdf)
 - [A Matter Of Timing: Clarifying Latency And Putting It Into Context - ProSoundWeb](https://www.prosoundweb.com/a-matter-of-timing-clarifying-latency-and-putting-it-into-context/)
 - [How digital audio latency can affect musicians and performers - Church Production Magazine](https://www.churchproduction.com/education/latency-and-its-affect-on-performers/)
+
+---
+
+## 2026-08-17 — Rust-vs-C++ per-block cost, controlled for build profile
+
+Context: the C++ port's `Corrector` (`cpp-plugin/Source/DSP/`, ported this
+session — see `docs/FINDINGS.md`) needed a real per-block cost number for
+the Phase 3 comparison. First attempt (`cpp-plugin/build/Release/Benchmarks`,
+Catch2 benchmark, block 2048): ~370us mean across 44.1/48/96kHz. Compared
+naively against this log's earlier Rust numbers (6,600-11,900us typical,
+post the 32→8 oversampling fix), that looked like a 20-30x C++ advantage —
+**wrong comparison, caught before writing it up**: every number in this
+log so far was gathered via `cargo run` (the root `CLAUDE.md`-documented
+command), which builds the **unoptimized debug profile**. Comparing a
+Rust debug build against a C++ Release build measures the compilers'
+optimization settings, not the algorithms or the languages.
+
+**Fix:** wrote `crates/pitch-core/examples/bench_corrector.rs`, mirroring
+`cpp-plugin/benchmarks/CorrectorPerformance.cpp` exactly — same block size
+(2048), same window (50ms), same synthetic 220Hz test tone (not silence —
+silence hits the power-threshold early exit and never runs real DSP), same
+three sample rates, same C major scale, same 100-iteration mean after a
+5-iteration warm-up. Run with `cargo run --release --example
+bench_corrector -p pitch-core`, not plain `cargo run`.
+
+**Controlled data** (block 2048, mean of 100 iterations each, both engines
+in an optimized build):
+
+| Sample rate | Rust (release) | C++ (Release) | Budget | Rust % of budget | C++ % of budget |
+|---|---|---|---|---|---|
+| 44100Hz | 461.5us | 371.4us | 46,439.9us | 0.99% | 0.80% |
+| 48000Hz | 349.1us | 368.3us | 42,666.7us | 0.82% | 0.86% |
+| 96000Hz | 307.0us | 375.6us | 21,333.3us | 1.44% | 1.76% |
+
+**Interpretation:** no consistent winner — C++ is faster at 44100Hz, Rust
+is faster at 96000Hz, they're within noise of each other at 48000Hz. Both
+engines are trivially under budget (under 2% utilization at every rate
+tested) once properly optimized. The honest story for the presentation
+isn't "one language wins," it's that a naive, profile-mismatched
+comparison would have overstated the gap by ~20-30x, and the real,
+controlled difference between the two engines is implementation-detail
+noise (most plausibly JUCE's Apple-optimized vDSP FFT backend vs.
+`rustfft`'s portable implementation — see `docs/ARCHITECTURE.md`'s Apple
+FFT engine notes — not evidence either language is fundamentally faster
+for this workload).
+
+**Implication for earlier entries in this log, not yet acted on:** this
+also means the 32→8 `OVER_SAMPLING` investigation above was conducted
+entirely in a debug build. The debug-profile "most blocks now clear
+budget with real margin" conclusion still held at the time (debug numbers
+vs. debug budget, an internally consistent comparison), but a release
+build finishes the *entire* corrector in less time than the debug build's
+shift stage alone took post-fix (6,500-11,300us) — meaning `OVER_SAMPLING
+= 8` was chosen against debug-build costs and hasn't been re-evaluated
+against release-build costs. Worth revisiting whether a higher oversampling
+value (better pitch-shift quality) is affordable in a release build before
+calling that parameter settled — **not done in this entry**, flagged as a
+follow-up, not a re-measurement, to keep this entry's data honest about
+what it does and doesn't cover.
+
+**Not covered by this entry:** the two-outlier tail-latency question from
+the oversampling entries above (still open — this entry's 100-iteration
+runs are too short in wall-clock time to observe rare scheduling-jitter
+spikes) and true end-to-end pipeline latency (still an analytical
+estimate, not measured, for both engines).
+
+---
+
+## 2026-08-17 — Measured pipeline latency, both engines: real numbers, not an estimate
+
+Context: Phase 1's original "immediate next task" (`docs/ROADMAP.md`) —
+replace the analytical ~70-100ms latency estimate above with an actual
+measurement. Deferred by the JD-driven reprioritization to the C++ port,
+picked back up once the sprint's core scope was done and there was runway
+left.
+
+**Method:** an impulse-response probe, one per engine
+(`crates/pitch-cli/examples/latency_probe.rs`,
+`cpp-plugin/benchmarks/LatencyProbe.cpp`), mirroring each other exactly —
+same block size (2048), same three sample rates, same technique: feed a
+single-sample impulse through the *same* ring-buffer/FIFO +
+worker-pipeline shape the real system uses (not calling
+`process()`/`Corrector::process` directly — this needs to capture
+whatever the block-accumulation architecture contributes, not just the
+DSP's own cost), then find the peak of the output response. For an
+impulse probe, this is the standard "impulse-response-peak as a
+group-delay proxy" technique — cross-correlating anything against a
+literal delta function reduces to finding the response's peak, so this
+isn't a shortcut, it's the textbook method evaluated at its simplest input.
+
+Both probes feed the entire signal into the ring buffer/FIFO at once
+rather than pacing it in real time — deliberately, not as an oversight;
+see the "what this does and doesn't capture" section below for why that
+turned out not to matter here.
+
+**Data** (impulse response peak position, in samples and ms):
+
+| Sample rate | Rust: samples (ms) | C++: samples (ms) |
+|---|---|---|
+| 44100Hz | 2206 (50.0ms) | 2048 (46.4ms) |
+| 48000Hz | 2400 (50.0ms) | 2048 (42.7ms) |
+| 96000Hz | 4800 (50.0ms) | 4096 (42.7ms) |
+
+**Finding: the measured latency exactly equals the phase vocoder's own
+frame size, in samples, at every sample rate, for both engines —
+independent of `BLOCK_SIZE` (2048, fixed).** Confirmed unambiguously at
+96kHz, where the two numbers can't be confused: C++'s frame size at 96kHz
+is 4096 (`cpp-plugin/Source/DSP/PitchShifter.cpp`'s nearest-power-of-two
+rounding), and the measured latency is exactly 4096 samples — not 2048
+(`BLOCK_SIZE`), not 2048+4096. Rust's frame size is
+`sample_rate * 50ms`, rounded to even, which is why its latency lands at
+exactly 50.0ms at every rate (the frame-size/sample-rate ratio is
+constant by construction) while C++'s lands at 42.7-46.4ms — a direct,
+now-measured consequence of the power-of-two frame-size rounding already
+documented as a design divergence in `docs/COMPARISON.md` (chosen
+specifically to avoid inflating latency versus rounding up) — that
+divergence isn't just a documented implementation detail anymore, it's a
+measured ~4-8ms latency difference between the two engines.
+
+**Why `BLOCK_SIZE` doesn't add on top, and why that's not a measurement
+artifact:** the ring-buffer/FIFO worker only calls
+`process()`/`Corrector::process` once it has a full `BLOCK_SIZE` (2048)
+of input — but the phase vocoder's *own* internal FIFO/window state is
+continuous across calls, not reset per call, and its own analysis window
+(the frame size — 2206-4800 samples for Rust, 2048-4096 for C++,
+depending on rate) is, in every case tested, **greater than or equal to**
+`BLOCK_SIZE`. Whichever lookahead requirement is larger wins: since the
+phase vocoder always needs at least as much lookahead as one `BLOCK_SIZE`
+chunk provides, waiting for a `BLOCK_SIZE` chunk to accumulate never adds
+delay beyond what the phase vocoder's own window already requires. This
+holds for a live, real-time-paced input too, not just this offline
+batch-fed probe: a live system fundamentally cannot produce output for a
+given input sample faster than its analysis window's worth of *future*
+samples have physically arrived, and that lower bound is exactly the
+frame size — which is what got measured. If `BLOCK_SIZE` were ever tuned
+larger than the phase vocoder's frame size, this would no longer hold and
+`BLOCK_SIZE` would start dominating instead; worth re-checking this
+reasoning if that ratio ever changes.
+
+**What this measurement does and doesn't include:** this is the
+pipeline's own algorithmic/software latency — ring buffer or FIFO,
+worker-thread accumulation, and the phase vocoder's analysis window. It
+does **not** include audio-hardware I/O latency (ADC input buffering, DAC
+output buffering), which is real, additive, and depends on the audio
+interface's own buffer-size configuration, not on this codebase — that
+remains a genuinely separate, unmeasured contributor for both engines.
+
+**Revising the earlier estimate:** the ~70-100ms analytical estimate in
+the SOTA-comparison entry above assumed block-accumulation delay
+(`BLOCK_SIZE`/sample rate, ~21-46ms) and the phase vocoder's window
+(~50ms) stack additively. They don't — this entry's data shows the larger
+of the two wins, not their sum. The real measured software latency
+(42.7-50.0ms depending on engine and rate) is close to *half* what the
+conservative estimate assumed. That earlier estimate wasn't wrong to be
+conservative given it was never measured, but the mechanism it assumed
+(additive stacking) was incorrect — worth stating plainly rather than
+quietly revising the number without explaining why it moved.
+
+**Not yet done:** pacing the probe's input in true real time (rather than
+batch-feeding the whole signal at once) as a direct empirical check on
+the "block-accumulation doesn't add delay" reasoning above, rather than
+relying on the argument for why it shouldn't. The reasoning is solid, but
+this codebase's own standard is measurement over argument where
+practical — flagged as a follow-up, not treated as equivalent to having
+already done it. Also not done: real audio-hardware loopback measurement
+(would need a physical loopback cable or interface, not available in this
+environment) to get the true end-to-end number including hardware I/O.
+
+---
+
+## 2026-08-17 — OVER_SAMPLING re-evaluated against release-build costs
+
+Context: flagged as a follow-up in this log's "Rust-vs-C++ per-block cost"
+entry above — `OVER_SAMPLING = 8` was chosen against Rust *debug*-build
+costs (the 32→8 entry near the top of this log), never re-checked against
+release-build costs once those turned out to be far cheaper than assumed.
+
+**What `OVER_SAMPLING` actually does**, for context on why this needed
+checking rather than assuming: it sets the phase vocoder's STFT hop size
+(`step = frameSize / overSampling`), not the analysis window size
+(`frameSize`) itself — a smaller hop means more overlapping analysis
+frames, which gives the algorithm's instantaneous-frequency estimation
+(the `deltaPhase`/`expected` phase-tracking math in both engines'
+`PitchShifter`) more, closer-spaced phase samples to work from, generally
+reducing phase-vocoder-typical artifacts ("phasiness," transient
+smearing). That's the standard DSP-literature explanation for the
+parameter's effect on quality — **not independently verified by ear in
+this session**; no audio-quality/listening test tooling exists in this
+environment, so "higher oversampling sounds better" is asserted on
+textbook grounds, not measured here. What *is* measured: cost and
+latency.
+
+**Method:** swept `overSampling` directly against `PitchShifter` (not the
+full `Corrector` — only the shift stage is affected by this parameter) at
+4/8/16/32/64, measuring both per-call cost and impulse-response latency
+in the same run, at 44100Hz, in both engines
+(`crates/pitch-core/examples/oversampling_sweep.rs`,
+`cpp-plugin/benchmarks/OversamplingSweep.cpp`). Release builds for both —
+the C++ side was first measured in Debug by mistake and re-run in Release
+before writing this up, the same debug/release discipline established in
+the entry above.
+
+**Data** (mean cost per call, % of the 46,439.9us budget at 44100Hz,
+block 2048):
+
+| over_sampling | Rust cost | Rust % budget | C++ cost | C++ % budget | Latency (both engines) |
+|---|---|---|---|---|---|
+| 4 | 225.2us | 0.48% | 135.7us | 0.29% | unchanged |
+| 8 (current) | 452.0us | 0.97% | 272.5us | 0.59% | unchanged |
+| 16 | 898.7us | 1.94% | 574.3us | 1.24% | unchanged |
+| 32 | 1981.6us | 4.27% | 1205.8us | 2.60% | unchanged |
+| 64 | 4543.1us | 9.78% | 2512.2us | 5.41% | unchanged |
+
+"Latency unchanged" is exact, not approximate: every single run at every
+`overSampling` value landed on precisely the same impulse-response peak
+sample index as at `overSampling = 8` (2206 samples / 50.0ms for Rust,
+2048 samples / 46.4ms for C++), for the reason in the "What
+`OVER_SAMPLING` actually does" paragraph above — the analysis window size
+is what determines latency, and this parameter doesn't touch it.
+
+**Also observed, not the point of this entry but worth noting honestly:**
+C++ is consistently faster than Rust at every value in this isolated
+shift-only sweep (~1.6-1.8x), unlike the full-`Corrector` comparison
+above where neither engine consistently won. Plausible explanation:
+JUCE's Apple-optimized vDSP FFT backend vs. `rustfft`'s portable one,
+consistent with this log's and `docs/COMPARISON.md`'s existing
+"implementation detail, not language" framing — not independently
+confirmed by further profiling here, flagged as an observation rather
+than a new conclusion.
+
+**Decision: raise `OVER_SAMPLING` from 8 to 16.** Reasoning: cost scales
+~linearly and stays cheap at every value tested (even 64 is under 10% of
+budget on the slower engine), and latency is provably unaffected — so the
+real constraint on how high to go isn't headroom, it's diminishing
+returns on quality past a certain point, which this session has no way to
+measure directly. Doubling to 16 is a meaningful, clearly-justified
+improvement (more overlap than before, room to spare — 1.24-1.94% of
+budget) without picking an arbitrary "why not 64" number that this data
+can't actually justify over 32 or 16 on quality grounds alone. The
+correct way to pick a final value is a listening test, not a headroom
+calculation — this is a conservative, defensible interim value, not a
+claim that 16 is optimal.
+
+**Verification:** both engines rebuilt with the new constant; `cargo
+test` (6/6), `cargo clippy` (clean), and the C++ `Tests` target (12/12,
+56 assertions) all still pass — this parameter doesn't change either
+engine's correctness-test behavior, only shift quality/cost, so a clean
+pass here confirms nothing broke, not that quality improved (that still
+needs the listening test noted above).
+
+---
+
+## 2026-08-17 — Correction: Auto-Tune's low-latency mode isn't an algorithm swap
+
+The SOTA-comparison entry above asserted "this is almost certainly the
+actual algorithmic reason Auto-Tune's low-latency mode and general mode
+differ so much — different underlying method, not just different tuning
+of the same one." Re-checked while discussing whether this project's
+hot-swap feature should generalize beyond Rust-vs-C++ — that claim
+doesn't hold up. Auto-Tune Pro's Low Latency mode is a toggle *within the
+same plugin*, switchable instantly, and by Antares' own description
+shares the same core pitch-correction algorithm as the full-quality mode;
+the one genuinely separate product, AutoTune Hybrid, gets to zero latency
+via dedicated Avid HDX/Carbon hardware DSP offload, not a different
+software algorithm. Sources: [AutoTune 2026 for Live & Studio](https://www.antarestech.com/products/pitch-correction/at2026),
+[AutoTune Hybrid](https://www.antarestech.com/products/pitch-correction/hybrid).
+Same caveat as the original entry: these are vendor-facing product pages,
+not published algorithmic documentation, so treat as directional, not
+verified implementation detail.
+
+Not edited into the original entry — this supersedes it, per this log's
+own append-only rule. The TD-PSOLA-vs-phase-vocoder algorithm-family
+question from that entry is still a real, valid lever in general (it's
+literature-supported, not vendor-marketing-supported), just not
+confirmed to be *the* mechanism Auto-Tune specifically uses for its live
+mode. More likely candidate, given it's a same-algorithm toggle: a
+settings/window-size tradeoff similar in kind to this project's own
+"content-aware window size" idea (`docs/ROADMAP.md` Phase 5) — not
+confirmed, but a more consistent explanation for a same-plugin, no-restart
+toggle than swapping the underlying method entirely.

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/pitch-core", "crates/pitch-cli"]
+members = ["crates/pitch-core", "crates/pitch-cli", "crates/pitch-core-ffi"]
 
 [workspace.package]
 edition = "2021"

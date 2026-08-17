@@ -1,0 +1,39 @@
+#include "PitchEngineRegistry.h"
+#include "NativeCorrectorEngine.h"
+#include "RustCorrectorEngine.h"
+
+namespace pitchzazz
+{
+
+const std::vector<EngineDescriptor>& availableEngines()
+{
+    static const std::vector<EngineDescriptor> engines = {
+        {
+            "native-cpp",
+            "Native C++",
+            [] (const EngineConfig& config) -> std::unique_ptr<PitchEngine>
+            {
+                return std::make_unique<NativeCorrectorEngine> (config);
+            },
+        },
+        {
+            "rust-ffi",
+            "Rust (FFI)",
+            [] (const EngineConfig& config) -> std::unique_ptr<PitchEngine>
+            {
+                return std::make_unique<RustCorrectorEngine> (config);
+            },
+        },
+    };
+    return engines;
+}
+
+std::unique_ptr<PitchEngine> createEngine (const std::string& id, const EngineConfig& config)
+{
+    for (const auto& descriptor : availableEngines())
+        if (descriptor.id == id)
+            return descriptor.create (config);
+    return nullptr;
+}
+
+} // namespace pitchzazz

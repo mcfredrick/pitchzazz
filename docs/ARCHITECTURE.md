@@ -135,10 +135,27 @@ pitch correction with a windowed detector. `--startup-latency-ms` pre-fills
 the output ring buffer with silence so the output callback has something to
 drain before the worker thread produces its first corrected block, trading
 a small fixed startup delay for immunity to an audible dropout while the
-pipeline is still filling. If this becomes a JUCE plugin later, the
-equivalent mechanism is `AudioProcessor::setLatencySamples()`, so the host
-can compensate — not implemented in the CLI since there's no host to report
-to.
+pipeline is still filling. The C++/JUCE port (`docs/ROADMAP.md` Phase 2)
+uses the equivalent host-facing mechanism, `AudioProcessor::setLatencySamples()`,
+so the DAW can compensate — the CLI has no host to report to, so it only
+has the startup-silence pre-fill instead.
+
+**Measured, not just estimated** (`docs/PERFORMANCE_LOG.md`'s 2026-08-17
+"Measured pipeline latency" entry, both engines): the pipeline's own
+software latency is exactly one phase-vocoder analysis window's worth of
+samples — 50.0ms for the Rust engine at every sample rate tested (by
+construction: its frame size is always `sampleRate * 50ms`), 42.7-46.4ms
+for the C++ engine (its frame size is rounded to the nearest power of two
+for `juce::dsp::FFT`, so it isn't exactly 50ms worth of samples — see
+`docs/COMPARISON.md`). The block-accumulation delay (`BLOCK_SIZE`/sample
+rate) does **not** add on top of that — whichever of the two lookahead
+requirements (block accumulation vs. the phase vocoder's own window) is
+larger wins, and in this design the phase vocoder's window is always the
+larger one, so it's the sole determinant of measured latency. This
+revises the earlier ~70-100ms estimate below (which assumed the two
+stack additively) down to the actual measured ~43-50ms range — real
+audio-hardware I/O buffering latency is still separate, additive, and not
+included in this measurement.
 
 ## Performance and latency
 
