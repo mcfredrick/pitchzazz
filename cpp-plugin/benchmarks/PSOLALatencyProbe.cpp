@@ -102,13 +102,13 @@ TEST_CASE ("PSOLA pipeline latency probe", "[latency][psola]")
 {
     // 220Hz: this project's standard test tone (matches
     // PitchDetectorTests.cpp, PitchShifterTests.cpp, etc.) -- the
-    // realistic-case number. 60Hz: this shifter's own worst-case floor
+    // realistic-case number. 80Hz: this shifter's own worst-case floor
     // (minHz in PSOLAPitchShifter.h) -- should measure close to the
     // reported claimedLatency itself, confirming the worst case is real,
     // not just a formula.
     for (double sampleRate : { 44100.0, 48000.0 })
     {
         probeAt (220.0f, sampleRate);
-        probeAt (60.0f, sampleRate);
+        probeAt (80.0f, sampleRate);
     }
 }

@@ -434,16 +434,37 @@ rebuilt AU/VST3.
 
 Real measured latency win — see `docs/PERFORMANCE_LOG.md`'s dated entry
 for the full numbers and the genuinely-real-not-just-derived-latency
-verification: ~28% less than the phase vocoder at 44.1kHz, ~22% less at
-48kHz, and (a real property of the algorithm, not a limitation of this
-implementation) constant in milliseconds across sample rates unlike the
-phase vocoder's sample-count-based window. Finding this number's real
-value required fixing a genuine floating-point robustness bug in the
-grain-read-position math, found via direct instrumentation after an
-initial measurement looked like an unexplained overshoot — full story in
-`docs/FINDINGS.md` #18, worth reading for the "increasing a safety margin
-didn't change the size of the gap, and that itself was the diagnostic
-clue" narrative.
+verification: constant in milliseconds across sample rates unlike the
+phase vocoder's sample-count-based window (a real property of the
+algorithm, not a limitation of this implementation). Finding the first
+version of this number required fixing a genuine floating-point
+robustness bug in the grain-read-position math, found via direct
+instrumentation after an initial measurement looked like an unexplained
+overshoot — full story in `docs/FINDINGS.md` #18, worth reading for the
+"increasing a safety margin didn't change the size of the gap, and that
+itself was the diagnostic clue" narrative.
+
+**Revisited same day, twice more, both user-directed.** (1) Tightened
+`minHz` 60->80 (still below typical bass vocal range, less headroom) for
+a pure, host-safe latency reduction — a fully *adaptive* (pitch-tracked)
+alternative was raised and explicitly rejected: a DAW host's plugin-delay-
+compensation needs one constant reported latency that the actual output
+delay always matches, and varying it at runtime risks the same
+host-compatibility problem this file's own "dynamic/hybrid window sizing"
+idea below already flagged for the phase vocoder. (2) Real listening on
+live audio (not the synthetic tones the unit tests use) found a crackle/
+low-frequency-beat artifact; root-caused to `placeGrainAt` snapping to a
+single analysis bucket instead of cross-fading between the two nearest,
+and fixed — at the cost of one more period of lookahead, partially
+offsetting (1)'s gain. Net result after both changes: ~19% less latency
+than the phase vocoder at 44.1kHz, ~12% less at 48kHz — smaller than
+either change alone implied, but real, and the crackle fix isn't
+optional (a faster engine that's audibly broken isn't a real
+alternative). Full accounting, including three automated-test approaches
+tried (and why none of them actually verified the crackle fix — matches
+this project's own finding #14 precedent that a passing metric and real
+perceptual quality aren't always the same bar) in `docs/PERFORMANCE_LOG.md`'s
+follow-up dated entry and `docs/FINDINGS.md` #19.
 
 - Note-matching refinement: handle edge cases beyond the current nearest-
   semitone search (e.g. weighting toward the previous detected note to
@@ -529,6 +550,19 @@ clue" narrative.
   palette. Styling-only, no layout/behavior changes to anything below.
 
 ## Presentation walkthrough tooling
+
+**Modern C++ best-practices audit, added 2026-08-17 — do before building
+the walkthrough below, not after.** A pass over the whole C++ codebase
+(not just the newest PSOLA code) checking for dated patterns a Sr Audio
+Core reviewer would notice: raw owning pointers where `unique_ptr`/
+`shared_ptr` belong, missing `noexcept`/`[[nodiscard]]` where warranted,
+`const`-correctness gaps, places a range-based `for` or `<algorithm>` call
+would replace a manual index loop, unnecessary copies where a reference
+or `std::move` belongs, and consistency with whatever subset of C++17
+this project already commits to elsewhere. Scoped as an audit-and-fix
+pass across the existing code, not a rewrite — the point is the
+walkthrough holding up to scrutiny on *every* file a reviewer might open,
+not just the ones freshly written.
 
 Before the actual presentation: set up a guided code walkthrough using one
 of the "code tour" style tools (e.g. the VS Code CodeTour extension and its

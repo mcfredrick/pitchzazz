@@ -47,7 +47,10 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
         const auto& availableEngines = processorRef.getAvailableEngines();
         const int index = engineBox.getSelectedId() - 1;
         if (index >= 0 && (size_t) index < availableEngines.size())
+        {
             processorRef.setEngine (availableEngines[(size_t) index].id);
+            resetSmoothingOnNextTick = true;
+        }
     };
     addAndMakeVisible (engineLabel);
     addAndMakeVisible (engineBox);
@@ -112,10 +115,33 @@ void PitchzazzAudioProcessorEditor::timerCallback()
     // EMA smoothing — see the class doc for why this over a windowed
     // average. Applied before anything derived from these values (labels
     // and meters alike) so the two stay consistent with each other.
-    smoothedLatencyMs += emaAlpha * ((float) processorRef.getActiveLatencyMs() - smoothedLatencyMs);
-    smoothedDetectUs += emaAlpha * ((float) processorRef.getLastDetectUs() - smoothedDetectUs);
-    smoothedQuantizeUs += emaAlpha * ((float) processorRef.getLastQuantizeUs() - smoothedQuantizeUs);
-    smoothedShiftUs += emaAlpha * ((float) processorRef.getLastShiftUs() - smoothedShiftUs);
+    //
+    // Right after an engine switch, blending would mix the outgoing
+    // engine's numbers into the incoming one's for the next second or
+    // two (emaAlpha's ~0.5s time constant) — a transitional reading that
+    // belongs to neither engine and would misrepresent both. Snap
+    // straight to the raw reading for exactly one tick instead, then
+    // resume normal smoothing from that point on.
+    const float rawLatencyMs = (float) processorRef.getActiveLatencyMs();
+    const float rawDetectUs = (float) processorRef.getLastDetectUs();
+    const float rawQuantizeUs = (float) processorRef.getLastQuantizeUs();
+    const float rawShiftUs = (float) processorRef.getLastShiftUs();
+
+    if (resetSmoothingOnNextTick)
+    {
+        smoothedLatencyMs = rawLatencyMs;
+        smoothedDetectUs = rawDetectUs;
+        smoothedQuantizeUs = rawQuantizeUs;
+        smoothedShiftUs = rawShiftUs;
+        resetSmoothingOnNextTick = false;
+    }
+    else
+    {
+        smoothedLatencyMs += emaAlpha * (rawLatencyMs - smoothedLatencyMs);
+        smoothedDetectUs += emaAlpha * (rawDetectUs - smoothedDetectUs);
+        smoothedQuantizeUs += emaAlpha * (rawQuantizeUs - smoothedQuantizeUs);
+        smoothedShiftUs += emaAlpha * (rawShiftUs - smoothedShiftUs);
+    }
 
     latencyValueLabel.setText ("Latency: " + juce::String (smoothedLatencyMs, 1) + "ms", juce::dontSendNotification);
     // Fixed 100ms scale: current engines measure 43-50ms (docs/PERFORMANCE_LOG.md),

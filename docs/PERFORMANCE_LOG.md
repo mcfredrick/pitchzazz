@@ -516,3 +516,84 @@ tested combination, no padding needed. Worth remembering for future
 work in this class of algorithm: "increasing a safety margin doesn't
 change the size of the discrepancy" is itself diagnostic — it means the
 bug isn't in the margin.
+
+---
+
+## 2026-08-17 — TD-PSOLA revisited: tighter floor, then a real quality fix that cost latency back
+
+Two changes to the entry above, in sequence, both user-directed. Superseding it per this log's own append-only rule, not editing it.
+
+**1. Tightened `minHz` (60 -> 80).** The entry above used a 60Hz floor —
+comfortably below a typical bass vocal (~80-150Hz), but more margin than
+this project's actual use case (vocal pitch correction, not general-
+purpose/instrument-agnostic shifting) needs. Since latency here is
+`k * ceil(sampleRate / minHz)` — a period-*count* bound, constant in
+milliseconds regardless of sample rate — raising the floor to 80Hz (still
+below typical bass vocal range, just with less headroom) is a pure,
+host-safe win: no runtime adaptivity, no risk to plugin-delay-compensation
+correctness (see below for why that risk is real and why this project
+isn't attempting it), just a smaller fixed number. At `k=2` (the
+derivation before the next change): 33.3ms -> 25.0ms, a 25% reduction, confirmed exact via `benchmarks/PSOLALatencyProbe.cpp` at both 44.1kHz and 48kHz.
+
+**Considered and rejected: fully adaptive (pitch-tracked) latency.**
+Raised directly by the user: since the actual data needed for a high
+detected pitch is ready well before the worst-case tap fires, why not
+slide the read tap forward and use fresher audio when available? The DSP
+math supports it, but a DAW host's plugin-delay-compensation (PDC) relies
+on `setLatencySamples()` reporting one *constant* value and the plugin's
+actual output delay matching it exactly, every block — if the real delay
+varied with detected pitch, output would arrive at an inconsistent
+effective offset relative to other tracks the host delayed to match the
+worst case, producing real phase/timing smear when mixed, even though
+each block's own processing is completely correct in isolation. Same
+open risk `docs/ROADMAP.md`'s "dynamic/hybrid window sizing" idea already
+flagged for the phase vocoder — not attempted here either, would need
+dedicated host-compatibility research first.
+
+**2. Cross-fade fix cost a period back (`k=2` -> `k=3`).** Separately,
+real listening on live audio (not the synthetic test tones the unit
+tests use) found a crackle/low-frequency-beat artifact — full diagnosis
+in `docs/FINDINGS.md`. Root cause: `placeGrainAt` read content from a
+single, floor-quantized analysis bucket, so source content jumped
+discretely every time the synthesis position crossed a bucket boundary.
+Fixed by cross-fading between the two nearest buckets instead, which
+needs an extra period of lookahead for the farther one — `latencySamples`
+became `3 * ceil(sampleRate / minHz)`, not 2.
+
+**Net effect, measured exact via the same probe:**
+
+| | 44.1kHz | 48kHz |
+|---|---|---|
+| Original (minHz=60, k=2) | 33.3ms | 33.3ms |
+| Floor tightened only (minHz=80, k=2) | 25.0ms | 25.0ms |
+| + cross-fade fix (minHz=80, k=3) | **37.55ms** | **37.5ms** |
+| Phase vocoder (unchanged) | 46.4ms | 42.7ms |
+| **Net reduction vs. phase vocoder** | **~19%** | **~12%** |
+
+The quality fix cost back more than the floor-tightening gained — net
+result is a smaller win over the phase vocoder than either the original
+33.3ms number (~28%/~22%) or the floor-only number (~46%/~41%) implied,
+but still a real, verified reduction, and the crackle fix isn't optional:
+an engine that's faster but audibly broken isn't a real alternative.
+Explicit trade-off, made with the data in front of us, not a regression
+nobody noticed.
+
+**Automated verification of the crackle fix itself: attempted, didn't
+land.** Three approaches tried (full account in
+`tests/DSP/PSOLAPitchShifterTests.cpp`'s own comments): a stationary-sine
+test can't expose the bug at all (a perfectly periodic signal's analysis
+buckets are identical whether cross-faded or not — the bug only bites
+non-stationary content, which real voice always is and a pure test tone
+never is); a tremolo-modulated signal compared against an externally-
+synthesized reference tone was phase-misaligned and meaningless; the same
+tremolo signal's own statistical outlier ratio (max delta vs. median
+delta) measured *lower* for the deliberately-broken single-bucket version
+than the fixed one on one real run — the opposite of discriminating.
+Matches this project's own earlier precedent (`docs/FINDINGS.md` #14): an
+automated metric passing and genuine perceptual quality are not always
+the same bar. The fix shipped anyway, justified by the DSP reasoning
+(a discrete source-content jump at a bucket boundary is a real,
+identifiable defect on its own terms) — real-audio listening
+confirmation from the user is still the open item, not an automated
+test asserting a threshold that was measured not to actually
+discriminate the regression.

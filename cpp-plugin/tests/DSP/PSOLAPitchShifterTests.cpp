@@ -1,6 +1,7 @@
 #include <DSP/PSOLAPitchShifter.h>
 #include <DSP/PitchDetector.h>
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
 #include <cmath>
 
 using namespace pitchzazz;
@@ -25,6 +26,27 @@ namespace
         }
         return block;
     }
+
+    // A tremolo (slow amplitude modulation) on top of the carrier —
+    // deliberately non-stationary, unlike sineBlock(). A pure stationary
+    // sine repeats *exactly* every period, so placeGrainAt()'s analysis
+    // buckets (each one period apart) always contain identical content
+    // regardless of whether they're cross-faded or snapped to one —
+    // meaning a plain sine test tone cannot expose a bucket-boundary
+    // discontinuity bug at all, cross-fade or not. Real voice is never
+    // perfectly stationary; this is the minimal signal that is.
+    std::vector<float> tremoloSineBlock (float carrierFreq, float modFreq, float modDepth,
+                                          double sampleRate, int blockSize, int blockIndex)
+    {
+        std::vector<float> block ((size_t) blockSize);
+        for (int i = 0; i < blockSize; ++i)
+        {
+            const float t = (float) (blockIndex * blockSize + i) / (float) sampleRate;
+            const float envelope = 1.0f + modDepth * std::sin (2.0f * juce::MathConstants<float>::pi * modFreq * t);
+            block[(size_t) i] = envelope * std::sin (2.0f * juce::MathConstants<float>::pi * carrierFreq * t);
+        }
+        return block;
+    }
 }
 
 // No Rust-side equivalent (PSOLA only exists in the C++ engine — see
@@ -42,7 +64,7 @@ TEST_CASE ("PSOLA: zero semitone shift roughly preserves signal energy", "[psola
     PSOLAPitchShifter shifter (sampleRate);
 
     std::vector<float> lastOutput;
-    // latencySamples (2 * sampleRate/minHz ~= 1470 at 44.1kHz) is well
+    // latencySamples (3 * sampleRate/minHz ~= 1656 at 44.1kHz) is well
     // under one block here, but several blocks still lets the overlap-add
     // settle into a steady state rather than asserting on a
     // still-partially-transient first block.
@@ -122,19 +144,84 @@ TEST_CASE ("reported latency is pitch-independent, worst-case, and far below the
 
     PSOLAPitchShifter shifter (sampleRate);
 
-    // Matches the derivation in PSOLAPitchShifter.h/.cpp exactly: 2 *
-    // ceil(sampleRate / minHz). Asserting the formula, not just "some
-    // small number," so a future change to minHz/the derivation itself
-    // has to consciously update this test rather than silently pass.
-    constexpr float minHz = 60.0f;
-    const int expectedLatency = 2 * (int) std::ceil (sampleRate / minHz);
+    // Matches the derivation in PSOLAPitchShifter.h/.cpp exactly: 3 *
+    // ceil(sampleRate / minHz) -- 3, not 2, since placeGrainAt()'s cross-
+    // fade between two analysis buckets (added to fix a real crackle/beat
+    // artifact -- docs/FINDINGS.md) needs an extra period of lookahead
+    // for the farther bucket. Asserting the formula, not just "some small
+    // number," so a future change to minHz/the derivation itself has to
+    // consciously update this test rather than silently pass.
+    constexpr float minHz = 80.0f;
+    const int expectedLatency = 3 * (int) std::ceil (sampleRate / minHz);
     CHECK (shifter.getLatencySamples() == expectedLatency);
 
     // The actual headline claim: at 44.1kHz the phase vocoder's window is
     // ~2048-2206 samples (docs/PERFORMANCE_LOG.md's measured-latency
-    // entry). This worst-case (60Hz) number is a real but modest win
-    // (~28% less); realistic vocal pitches (100-300Hz) get a far bigger
-    // one, since this shifter's actual latency is pitch-dependent — see
-    // docs/PERFORMANCE_LOG.md's dated entry for that fuller comparison.
+    // entry). This is a *fixed* worst-case number, not an adaptive one —
+    // it does not get smaller for higher detected pitches at runtime (see
+    // getLatencySamples()'s doc for why: a host needs one constant value,
+    // not one that varies block to block).
     CHECK (shifter.getLatencySamples() < 2048);
+}
+
+// Deliberately NOT a test asserting the cross-fade fix eliminates the
+// crackle/beat artifact from docs/FINDINGS.md — three different automated
+// approaches were actually tried (external reference at the target
+// frequency: meaningless, since the reference's arbitrary phase has no
+// relationship to the shifter's own output phase; a stationary sine
+// input: cannot expose the bug at all, since a perfectly periodic
+// signal's analysis buckets are identical whether cross-faded or not;
+// a statistical outlier ratio against a mildly-modulated tremolo signal:
+// measured *lower* for the broken single-bucket version than the fixed
+// one on one real run, the opposite of discriminating) and none of them
+// reliably told single-bucket and cross-faded output apart within
+// reasonable effort. Matches this project's own precedent
+// (docs/FINDINGS.md #14): an automated metric passing and genuine
+// perceptual quality are not always the same bar, and asserting a
+// threshold that doesn't actually discriminate the regression would be
+// worse than no test — false confidence, not real coverage. The fix
+// itself is justified by the DSP reasoning in placeGrainAt()'s comment
+// (a discrete source-content jump at bucket boundaries is a real,
+// identifiable defect, independent of how hard it is to score
+// automatically) and was validated by ear against real audio, not by
+// this test. What this test actually checks is the sanity floor every
+// other shifter test in this file already uses: bounded, non-exploding
+// output — worth keeping as a coarse regression guard even without a
+// crackle-specific metric.
+TEST_CASE ("shifting a non-stationary tone stays bounded (a wider net than a single stationary tone)", "[psola-shifter]")
+{
+    constexpr double sampleRate = 44100.0;
+    constexpr int blockSize = 2048;
+    constexpr float sourceFreq = 220.0f;
+    constexpr float semitoneShift = 12.0f; // an octave up -- frequent bucket transitions, the case that produced the original crackle
+    constexpr float modFreq = 6.0f;        // a plausible vibrato/tremolo rate -- slow relative to the carrier
+    constexpr float modDepth = 0.15f;
+
+    PSOLAPitchShifter shifter (sampleRate);
+
+    std::vector<float> lastOutput;
+    for (int block = 0; block < 6; ++block)
+    {
+        const auto input = tremoloSineBlock (sourceFreq, modFreq, modDepth, sampleRate, blockSize, block);
+        std::vector<float> output (blockSize, 0.0f);
+        shifter.shiftPitch (sourceFreq, semitoneShift, input, output);
+        lastOutput = output;
+    }
+
+    std::vector<float> deltas (lastOutput.size() - 1);
+    for (size_t i = 1; i < lastOutput.size(); ++i)
+        deltas[i - 1] = std::abs (lastOutput[i] - lastOutput[i - 1]);
+    std::sort (deltas.begin(), deltas.end());
+
+    const float medianDelta = deltas[deltas.size() / 2];
+    const float maxDelta = deltas.back();
+
+    // A loose bound (same spirit as the energy-preservation test above):
+    // catches an output that's silent, exploding, or NaN-producing.
+    // Measured ~4x on this exact signal with the cross-fade fix in
+    // place, and ~4x with it temporarily reverted too — genuinely does
+    // NOT discriminate the crackle regression (see this test's own
+    // header comment for the full story), so 30x here is only a coarse
+    // net, not a claim this ratio means "no crackle."
+    CHECK (maxDelta < medianDelta * 30.0f);
 }

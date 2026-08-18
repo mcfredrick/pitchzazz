@@ -81,6 +81,14 @@ private:
     float smoothedQuantizeUs = 0.0f;
     float smoothedShiftUs = 0.0f;
 
+    // Set true by the engine selector's onChange, consumed by the next
+    // timerCallback() tick: without this, switching engines would EMA-
+    // blend the outgoing engine's numbers into the incoming one's for the
+    // next second or two, showing a misleading transitional reading that
+    // belongs to neither engine — the smoothing state itself carries no
+    // memory of *which* engine it was measuring.
+    bool resetSmoothingOnNextTick = false;
+
     // Set by resized(), read by paint() — the divider line between the
     // controls and performance sections has to track the same layout
     // computation resized() already does rather than duplicating it.
