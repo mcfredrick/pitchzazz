@@ -348,10 +348,11 @@ void PitchzazzAudioProcessorEditor::resized()
 
     area.removeFromTop (4);
     auto centsMeterRow = area.removeFromTop (16);
-    // Same left-half width as detectedPitchDisplay above — this meter is
-    // that box's own fine-grained reading, so it should visually belong
-    // to it rather than spanning the full row.
-    detectedCentsMeter.setBounds (centsMeterRow.removeFromLeft (centsMeterRow.getWidth() / 2 - 4));
+    // Full row width, spanning both DETECTED and CORRECTED above: this is
+    // a read on the same "how is the pitch behaving right now" question
+    // those two boxes answer together, not just a footnote on DETECTED
+    // alone, so it reads as belonging to the pair rather than one half.
+    detectedCentsMeter.setBounds (centsMeterRow);
 
     area.removeFromTop (12);
     bypassButton.setBounds (area.removeFromTop (28));

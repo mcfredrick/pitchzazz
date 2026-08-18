@@ -51,9 +51,11 @@
     PitchEngine.h) so the UI is honest about why they stopped doing
     anything rather than pretending they still apply.
 
-    Tuner-style cents meter (added 2026-08-17): a thin gauge under the
-    DETECTED display showing pitchzazz::centsOffsetFromNearestNote — how
-    sharp/flat the raw input is relative to the nearest chromatic note,
+    Tuner-style cents meter (added 2026-08-17, widened to the full row
+    2026-08-17): a thin gauge spanning the full width under both the
+    DETECTED and CORRECTED displays, showing
+    pitchzazz::centsOffsetFromNearestNote — how sharp/flat the raw input
+    is relative to the nearest chromatic note,
     i.e. the sub-semitone detail the DETECTED note name's own rounding
     discards. Deliberately measured against the nearest chromatic note,
     not the scale-corrected target semitoneShift represents — see that
@@ -94,7 +96,7 @@ private:
     // than the controls silently vanishing or silently no-oping.
     juce::Label correctionAmountLabel { {}, "Amount" };
     juce::Slider correctionAmountSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
-    juce::Label retuneSpeedLabel { {}, "Speed" };
+    juce::Label retuneSpeedLabel { {}, "Smooth" };
     juce::Slider retuneSpeedSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
 
     pitchzazz::LCDDisplay detectedPitchDisplay;
