@@ -345,7 +345,13 @@ juce_add_plugin(${PROJECT_NAME}
     COMPANY_NAME ${COMPANY_NAME}
     BUNDLE_ID ${PROJECT_BUNDLE_ID}
     IS_SYNTH FALSE
-    NEEDS_MIDI_INPUT FALSE
+    # Monophonic MIDI vocoder mode (docs/ROADMAP.md Phase 5): incoming
+    # MIDI notes set the pitch-correction target. Stays an audio effect
+    # that also accepts MIDI as a control input, not an instrument
+    # (IS_SYNTH) or a MIDI-only effect (IS_MIDI_EFFECT, which is
+    # MIDI-in/MIDI-out with no audio I/O at all — the wrong plugin type
+    # for this, see docs/FINDINGS.md #8's history of this exact mixup).
+    NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     NEEDS_EDITOR TRUE

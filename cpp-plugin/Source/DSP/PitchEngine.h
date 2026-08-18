@@ -73,6 +73,15 @@ public:
     virtual bool supportsGrainWidthControl() const noexcept { return false; }
     virtual void setGrainWidthMultiplier (float) noexcept {}
 
+    /// Monophonic MIDI vocoder mode (docs/ROADMAP.md Phase 5) — same
+    /// default-no-op, capability-gated shape as the controls above.
+    /// `noteNumber` is a MIDI note 0-127, or -1 for "no note held"; when
+    /// held, it replaces scale-quantization as the correction target
+    /// (see MidiFallbackMode's doc for what happens when it isn't).
+    virtual bool supportsMidiTargeting() const noexcept { return false; }
+    virtual void setMidiTargetNote (int) noexcept {}
+    virtual void setMidiFallbackMode (MidiFallbackMode) noexcept {}
+
     /// `samples.size()` must equal the `blockSize` passed to whichever
     /// factory function constructed this engine.
     [[nodiscard]] virtual CorrectionResult process (const std::vector<float>& samples, double sampleRate) = 0;

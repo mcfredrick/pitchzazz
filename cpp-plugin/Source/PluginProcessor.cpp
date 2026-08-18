@@ -155,9 +155,29 @@ bool PitchzazzAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts
 void PitchzazzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                               juce::MidiBuffer& midiMessages)
 {
-    juce::ignoreUnused (midiMessages);
-
     juce::ScopedNoDenormals noDenormals;
+
+    // Monophonic MIDI vocoder mode (docs/ROADMAP.md Phase 5): update the
+    // note-priority stack and forward the result to the worker. This is
+    // the only DSP-facing parameter on this class written from processBlock
+    // itself rather than the editor's message thread — MIDI only arrives
+    // here, and MidiNoteStack::noteOn/noteOff are real-time-safe by
+    // construction (fixed-size arrays, no allocation, no lock), so there's
+    // no reason to bounce it through the message thread first. The worker
+    // handoff below is the same relaxed-atomic pattern as every other
+    // cross-thread parameter here — the mechanism doesn't care which
+    // thread writes it.
+    for (const auto metadata : midiMessages)
+    {
+        const auto message = metadata.getMessage();
+        if (message.isNoteOn())
+            midiNoteStack.noteOn (message.getNoteNumber());
+        else if (message.isNoteOff())
+            midiNoteStack.noteOff (message.getNoteNumber());
+    }
+    if (worker != nullptr)
+        worker->setMidiTargetNote (midiNoteStack.activeNote());
+
     const int numSamples = buffer.getNumSamples();
     const int numInputChannels = getTotalNumInputChannels();
     const int numOutputChannels = getTotalNumOutputChannels();
@@ -259,6 +279,18 @@ void PitchzazzAudioProcessor::setGrainWidthMultiplier (float multiplier) noexcep
 bool PitchzazzAudioProcessor::activeEngineSupportsGrainWidthControl() const noexcept
 {
     return worker != nullptr && worker->getActiveSupportsGrainWidthControl();
+}
+
+void PitchzazzAudioProcessor::setMidiFallbackMode (pitchzazz::MidiFallbackMode mode) noexcept
+{
+    currentMidiFallbackMode = mode;
+    if (worker != nullptr)
+        worker->setMidiFallbackMode (mode);
+}
+
+bool PitchzazzAudioProcessor::activeEngineSupportsMidiTargeting() const noexcept
+{
+    return worker != nullptr && worker->getActiveSupportsMidiTargeting();
 }
 
 void PitchzazzAudioProcessor::setEngine (const std::string& engineId)

@@ -19,6 +19,16 @@ constexpr float retuneSpeedMsMin = 0.0f;
 // usefulness, not a DSP constraint (the math below has no upper bound).
 constexpr float retuneSpeedMsMax = 1000.0f;
 
+// Fixed anti-click gain-ramp time constant for MIDI vocoder mode's
+// "silence" fallback (docs/ROADMAP.md Phase 5) — deliberately *not* a
+// user-facing control like the two constants above: this exists purely to
+// avoid a hard mute/unmute discontinuity (the same class of bug
+// docs/FINDINGS.md #14 found in the hot-swap crossfade), not to be a
+// musical parameter someone would want to tune. 10ms is short enough to
+// read as an immediate mute to a listener, long enough that a one-pole
+// ramp at this time constant has no audible step at any block boundary.
+constexpr float silenceRampMs = 10.0f;
+
 /// Blends `rawShift` toward zero by `amount` (0 = no correction at all,
 /// 1 = this project's original full-snap default). A pure scale, applied
 /// *before* the glide below, not fused into one formula — keeping "how far
