@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PitchEngine.h"
+#include "RetuneSmoothing.h"
 #include <juce_core/juce_core.h>
 #include <atomic>
 #include <memory>
@@ -73,6 +74,21 @@ public:
     /// like this, unlike the audio-data FIFOs above.
     void setScale (Scale newScale) noexcept;
 
+    /// The classic Auto-Tune controls (docs/ROADMAP.md Phase 5) — same
+    /// relaxed-atomic, eventually-consistent forwarding as setScale above,
+    /// applied to the active engine (and, during a crossfade, the
+    /// incoming one too) every block in run(). Silently a no-op on an
+    /// engine that doesn't support them (PitchEngine's default virtuals);
+    /// see getActiveSupportsRetuneControls() for how the UI can tell.
+    void setCorrectionAmount (float amount) noexcept;
+    void setRetuneSpeedMs (float speedMs) noexcept;
+
+    /// Whether the currently active engine implements the controls above
+    /// — for the UI to disable them honestly on an engine that doesn't,
+    /// rather than accepting input that silently does nothing. Same
+    /// eventual-consistency caveat as getActiveEngineName above.
+    bool getActiveSupportsRetuneControls() const noexcept;
+
     /// Hands off a new engine for the worker to switch to. `newEngine`
     /// must already be fully constructed (see class doc for why) and
     /// built with the same `blockSize` this worker was constructed with.
@@ -133,6 +149,15 @@ private:
 
     std::atomic<int> pendingTonicPitchClass;
     std::atomic<int> pendingMode;
+    // Hardcoded to this project's original defaults rather than threaded
+    // in from the processor's current setting at construction time — same
+    // convention pendingTonicPitchClass/pendingMode above already use (see
+    // PluginProcessor::prepareToPlay, which constructs the *engine* itself
+    // with the caller's current values via EngineConfig, but always starts
+    // a fresh worker's pending-atomic defaults at this class's own
+    // baseline). Consistent with existing behavior, not a new gap.
+    std::atomic<float> pendingCorrectionAmount { correctionAmountMax };
+    std::atomic<float> pendingRetuneSpeedMs { retuneSpeedMsMin };
 
     // Ownership handoff for the pending engine swap: the message thread
     // releases a unique_ptr into this raw pointer (std::atomic<T*> has no
@@ -141,6 +166,7 @@ private:
     // ownership — see requestEngineSwap()/run()'s implementation.
     std::atomic<PitchEngine*> pendingEngine { nullptr };
     std::atomic<const char*> activeEngineName { nullptr };
+    std::atomic<bool> activeSupportsRetuneControls { false };
     std::atomic<int> activeLatencySamples { 0 };
     std::atomic<double> lastDetectUs { 0.0 };
     std::atomic<double> lastQuantizeUs { 0.0 };

@@ -230,6 +230,25 @@ void PitchzazzAudioProcessor::setScale (pitchzazz::Scale newScale)
         worker->setScale (newScale);
 }
 
+void PitchzazzAudioProcessor::setCorrectionAmount (float amount) noexcept
+{
+    currentCorrectionAmount = juce::jlimit (pitchzazz::correctionAmountMin, pitchzazz::correctionAmountMax, amount);
+    if (worker != nullptr)
+        worker->setCorrectionAmount (currentCorrectionAmount);
+}
+
+void PitchzazzAudioProcessor::setRetuneSpeedMs (float speedMs) noexcept
+{
+    currentRetuneSpeedMs = juce::jlimit (pitchzazz::retuneSpeedMsMin, pitchzazz::retuneSpeedMsMax, speedMs);
+    if (worker != nullptr)
+        worker->setRetuneSpeedMs (currentRetuneSpeedMs);
+}
+
+bool PitchzazzAudioProcessor::activeEngineSupportsRetuneControls() const noexcept
+{
+    return worker != nullptr && worker->getActiveSupportsRetuneControls();
+}
+
 void PitchzazzAudioProcessor::setEngine (const std::string& engineId)
 {
     currentEngineId = engineId;

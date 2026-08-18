@@ -42,6 +42,14 @@
     (`detectedHz * 2^(semitoneShift/12)`), the same relationship
     `Corrector::process()` itself uses, rather than duplicating that math
     on the DSP side for a display-only value.
+
+    Creative controls (added 2026-08-17): correction amount (0-100%,
+    blends towards "no correction") and retune speed (0-1000ms glide time
+    constant, 0 = instant snap) — docs/ROADMAP.md Phase 5's "classic
+    Auto-Tune controls." Disabled, not hidden, when the active engine
+    doesn't implement them (currently just the Rust engine — see
+    PitchEngine.h) so the UI is honest about why they stopped doing
+    anything rather than pretending they still apply.
 */
 class PitchzazzAudioProcessorEditor : public juce::AudioProcessorEditor,
                                        private juce::Timer
@@ -64,6 +72,16 @@ private:
     juce::ToggleButton bypassButton { "Bypass" };
     juce::Label engineLabel { {}, "Engine" };
     juce::ComboBox engineBox;
+
+    // The classic Auto-Tune controls (docs/ROADMAP.md Phase 5). Disabled
+    // (not hidden) on an engine that doesn't implement them — see
+    // updateRetuneControlsEnablement()'s doc — so a user switching to the
+    // Rust engine sees *why* the controls stopped doing anything rather
+    // than the controls silently vanishing or silently no-oping.
+    juce::Label correctionAmountLabel { {}, "Amount" };
+    juce::Slider correctionAmountSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+    juce::Label retuneSpeedLabel { {}, "Speed" };
+    juce::Slider retuneSpeedSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
 
     pitchzazz::LCDDisplay detectedPitchDisplay;
     pitchzazz::LCDDisplay correctedPitchDisplay;
@@ -108,6 +126,14 @@ private:
 
     void updateProcessorScale();
     void timerCallback() override;
+
+    // Reflects the active engine's supportsRetuneControls() onto the two
+    // sliders' enabled state — checked from the engine selector's onChange
+    // (immediate) and every timerCallback tick (in case the active engine
+    // changes for a reason other than the user picking one, though nothing
+    // in this plugin currently does that — cheap enough to be safe here
+    // rather than relying on that always being true).
+    void updateRetuneControlsEnablement();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PitchzazzAudioProcessorEditor)
 };

@@ -40,14 +40,22 @@ CorrectionResult PSOLACorrector::process (const std::vector<float>& samples, dou
     }
     result.timings.quantizeUs = microsSince (quantizeStart);
 
+    // See Corrector::process()'s equivalent block for the full reasoning
+    // — identical formula, identical ordering, so the user-facing control
+    // feels like the same knob on both engines.
+    const float targetShift = applyCorrectionAmount (semitoneShift, correctionAmount);
+    const float blockPeriodMs = (float) samples.size() / (float) sampleRate * 1000.0f;
+    const float appliedShift = glideTowards (previousAppliedShift, targetShift, retuneSpeedMs, blockPeriodMs);
+    previousAppliedShift = appliedShift;
+
     const auto shiftStart = std::chrono::steady_clock::now();
     result.samples.assign (samples.size(), 0.0f);
-    shifter.shiftPitch (pitch.frequencyHz, semitoneShift, samples, result.samples);
+    shifter.shiftPitch (pitch.frequencyHz, appliedShift, samples, result.samples);
     result.timings.shiftUs = microsSince (shiftStart);
 
     result.detectedHz = pitch.frequencyHz;
     result.detectedClarity = pitch.clarity;
-    result.semitoneShift = semitoneShift;
+    result.semitoneShift = appliedShift; // the applied shift, not the raw target -- see Corrector::process()'s comment
 
     return result;
 }

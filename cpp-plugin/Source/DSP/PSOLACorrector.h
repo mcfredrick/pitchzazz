@@ -3,6 +3,7 @@
 #include "Corrector.h" // CorrectionResult, StageTimings, hzToMidi/midiToHz
 #include "PSOLAPitchShifter.h"
 #include "PitchDetector.h"
+#include "RetuneSmoothing.h"
 #include "Scale.h"
 #include <vector>
 
@@ -30,6 +31,16 @@ public:
 
     void setScale (Scale newScale) noexcept { scale = newScale; }
 
+    /// Same controls, same formulas, same clamping as Corrector's
+    /// equivalent setters — see RetuneSmoothing.h. Duplicated per this
+    /// class's own doc comment above (a near-duplicate of Corrector by
+    /// design, not templatized), but the *formulas themselves* live in one
+    /// shared header specifically so amount/speed can't drift out of sync
+    /// between the two engines even though the orchestration around them
+    /// does.
+    void setCorrectionAmount (float amount) noexcept { correctionAmount = juce::jlimit (correctionAmountMin, correctionAmountMax, amount); }
+    void setRetuneSpeedMs (float speedMs) noexcept { retuneSpeedMs = juce::jlimit (retuneSpeedMsMin, retuneSpeedMsMax, speedMs); }
+
     /// `samples.size()` must equal the `blockSize` passed to the constructor.
     [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate);
 
@@ -40,6 +51,10 @@ private:
     PSOLAPitchShifter shifter;
     int blockSize;
     Scale scale;
+
+    float correctionAmount = correctionAmountMax;
+    float retuneSpeedMs = retuneSpeedMsMin;
+    float previousAppliedShift = 0.0f;
 };
 
 } // namespace pitchzazz
