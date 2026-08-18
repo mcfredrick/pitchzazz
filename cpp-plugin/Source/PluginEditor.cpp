@@ -67,10 +67,33 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
         {
             processorRef.setEngine (availableEngines[(size_t) index].id);
             resetSmoothingOnNextTick = true;
+            updateRetuneControlsEnablement();
         }
     };
     addAndMakeVisible (engineLabel);
     addAndMakeVisible (engineBox);
+
+    // Range/suffix chosen to match how the DSP layer itself interprets
+    // these values (RetuneSmoothing.h): amount as a 0-100% blend, speed as
+    // a millisecond time constant (not a 0-100 "feel" knob) so the number
+    // shown is the number that's actually meaningful to the math, not an
+    // arbitrary UI-only scale.
+    correctionAmountSlider.setRange (100.0 * (double) pitchzazz::correctionAmountMin,
+                                      100.0 * (double) pitchzazz::correctionAmountMax, 1.0);
+    correctionAmountSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 48, 20);
+    correctionAmountSlider.setTextValueSuffix ("%");
+    correctionAmountSlider.setValue (100.0 * (double) processorRef.getCorrectionAmount(), juce::dontSendNotification);
+    correctionAmountSlider.onValueChange = [this] { processorRef.setCorrectionAmount ((float) (correctionAmountSlider.getValue() / 100.0)); };
+    addAndMakeVisible (correctionAmountLabel);
+    addAndMakeVisible (correctionAmountSlider);
+
+    retuneSpeedSlider.setRange ((double) pitchzazz::retuneSpeedMsMin, (double) pitchzazz::retuneSpeedMsMax, 1.0);
+    retuneSpeedSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 48, 20);
+    retuneSpeedSlider.setTextValueSuffix ("ms");
+    retuneSpeedSlider.setValue ((double) processorRef.getRetuneSpeedMs(), juce::dontSendNotification);
+    retuneSpeedSlider.onValueChange = [this] { processorRef.setRetuneSpeedMs ((float) retuneSpeedSlider.getValue()); };
+    addAndMakeVisible (retuneSpeedLabel);
+    addAndMakeVisible (retuneSpeedSlider);
 
     // Cyan for "detected" (matches the detect-stage meter below) and
     // green for "corrected" (matches the shift-stage meter, and reads as
@@ -124,7 +147,9 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     addAndMakeVisible (shiftValueLabel);
     addAndMakeVisible (totalValueLabel);
 
-    setSize (320, 570);
+    setSize (320, 642);
+
+    updateRetuneControlsEnablement();
 
     // 10Hz: fast enough to read as "live" for a demo, slow enough not to
     // burden the message thread — this is a UI poll, not audio-path code,
@@ -141,6 +166,8 @@ PitchzazzAudioProcessorEditor::~PitchzazzAudioProcessorEditor()
 
 void PitchzazzAudioProcessorEditor::timerCallback()
 {
+    updateRetuneControlsEnablement();
+
     // EMA smoothing — see the class doc for why this over a windowed
     // average. Applied before anything derived from these values (labels
     // and meters alike) so the two stay consistent with each other.
@@ -211,6 +238,17 @@ void PitchzazzAudioProcessorEditor::timerCallback()
     correctedPitchDisplay.setValueText (noteNameAndHz (correctedHz));
 }
 
+void PitchzazzAudioProcessorEditor::updateRetuneControlsEnablement()
+{
+    // A slider's own onValueChange doesn't fire from setEnabled(), so
+    // toggling this can't accidentally push a stale value to the
+    // processor — it only ever changes whether the *next* user drag does
+    // anything.
+    const bool enabled = processorRef.activeEngineSupportsRetuneControls();
+    correctionAmountSlider.setEnabled (enabled);
+    retuneSpeedSlider.setEnabled (enabled);
+}
+
 void PitchzazzAudioProcessorEditor::updateProcessorScale()
 {
     const int tonicPitchClass = tonicBox.getSelectedId() - 1;
@@ -259,6 +297,18 @@ void PitchzazzAudioProcessorEditor::resized()
     auto engineRow = area.removeFromTop (28);
     engineLabel.setBounds (engineRow.removeFromLeft (60));
     engineBox.setBounds (engineRow);
+
+    area.removeFromTop (8);
+
+    auto correctionAmountRow = area.removeFromTop (28);
+    correctionAmountLabel.setBounds (correctionAmountRow.removeFromLeft (60));
+    correctionAmountSlider.setBounds (correctionAmountRow);
+
+    area.removeFromTop (8);
+
+    auto retuneSpeedRow = area.removeFromTop (28);
+    retuneSpeedLabel.setBounds (retuneSpeedRow.removeFromLeft (60));
+    retuneSpeedSlider.setBounds (retuneSpeedRow);
 
     area.removeFromTop (16);
     auto pitchDisplayRow = area.removeFromTop (54);

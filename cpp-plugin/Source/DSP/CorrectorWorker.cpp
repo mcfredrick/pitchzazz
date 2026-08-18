@@ -23,6 +23,7 @@ CorrectorWorker::CorrectorWorker (int blockSizeIn, double sampleRateIn, std::uni
     jassert (engine != nullptr);
     activeEngineName.store (engine->getName(), std::memory_order_relaxed);
     activeLatencySamples.store (engine->getLatencySamples(), std::memory_order_relaxed);
+    activeSupportsRetuneControls.store (engine->supportsRetuneControls(), std::memory_order_relaxed);
 }
 
 CorrectorWorker::~CorrectorWorker()
@@ -39,6 +40,21 @@ void CorrectorWorker::setScale (Scale newScale) noexcept
 {
     pendingTonicPitchClass.store (newScale.tonicPitchClass, std::memory_order_relaxed);
     pendingMode.store (static_cast<int> (newScale.mode), std::memory_order_relaxed);
+}
+
+void CorrectorWorker::setCorrectionAmount (float amount) noexcept
+{
+    pendingCorrectionAmount.store (amount, std::memory_order_relaxed);
+}
+
+void CorrectorWorker::setRetuneSpeedMs (float speedMs) noexcept
+{
+    pendingRetuneSpeedMs.store (speedMs, std::memory_order_relaxed);
+}
+
+bool CorrectorWorker::getActiveSupportsRetuneControls() const noexcept
+{
+    return activeSupportsRetuneControls.load (std::memory_order_relaxed);
 }
 
 void CorrectorWorker::requestEngineSwap (std::unique_ptr<PitchEngine> newEngine) noexcept
@@ -145,7 +161,11 @@ void CorrectorWorker::run()
 
         const Scale scale { pendingTonicPitchClass.load (std::memory_order_relaxed),
                              static_cast<ScaleMode> (pendingMode.load (std::memory_order_relaxed)) };
+        const float correctionAmount = pendingCorrectionAmount.load (std::memory_order_relaxed);
+        const float retuneSpeedMs = pendingRetuneSpeedMs.load (std::memory_order_relaxed);
         engine->setScale (scale);
+        engine->setCorrectionAmount (correctionAmount);
+        engine->setRetuneSpeedMs (retuneSpeedMs);
 
         if (crossfadeEngine != nullptr)
         {
@@ -159,6 +179,8 @@ void CorrectorWorker::run()
             // see the class doc for why a single block wasn't gentle
             // enough.
             crossfadeEngine->setScale (scale);
+            crossfadeEngine->setCorrectionAmount (correctionAmount);
+            crossfadeEngine->setRetuneSpeedMs (retuneSpeedMs);
             const auto oldResult = engine->process (analysisBuffer, sampleRate);
             const auto newResult = crossfadeEngine->process (analysisBuffer, sampleRate);
 
@@ -207,6 +229,7 @@ void CorrectorWorker::run()
                 crossfadeBlockIndex = 0;
                 activeEngineName.store (engine->getName(), std::memory_order_relaxed);
                 activeLatencySamples.store (engine->getLatencySamples(), std::memory_order_relaxed);
+                activeSupportsRetuneControls.store (engine->supportsRetuneControls(), std::memory_order_relaxed);
             }
         }
         else

@@ -2,6 +2,7 @@
 
 #include "PitchDetector.h"
 #include "PitchShifter.h"
+#include "RetuneSmoothing.h"
 #include "Scale.h"
 #include <vector>
 
@@ -55,12 +56,24 @@ public:
 
     void setScale (Scale newScale) noexcept { scale = newScale; }
 
+    /// The classic Auto-Tune "correction amount" / "retune speed" controls
+    /// (docs/ROADMAP.md Phase 5) — see RetuneSmoothing.h for the formulas
+    /// and the reasoning behind each. Clamped here (not just at the UI
+    /// layer) so this class's own invariants hold regardless of caller
+    /// discipline, matching this project's "validate at the boundary you
+    /// own" convention.
+    void setCorrectionAmount (float amount) noexcept { correctionAmount = juce::jlimit (correctionAmountMin, correctionAmountMax, amount); }
+    void setRetuneSpeedMs (float speedMs) noexcept { retuneSpeedMs = juce::jlimit (retuneSpeedMsMin, retuneSpeedMsMax, speedMs); }
+
     /// `samples.size()` must equal the `blockSize` passed to the constructor.
     CorrectionResult process (const std::vector<float>& samples, double sampleRate);
 
     /// Algorithmic pipeline latency, in samples — delegates to the
     /// shifter, since that's the sole contributor (see
-    /// PitchShifter::getLatencySamples's doc).
+    /// PitchShifter::getLatencySamples's doc). Unaffected by
+    /// correctionAmount/retuneSpeedMs above: both only change *how much*
+    /// of the shift is applied and *how quickly* it's approached, not the
+    /// shifter's own analysis window, which is what determines latency.
     int getLatencySamples() const noexcept { return shifter.getLatencySamples(); }
 
 private:
@@ -68,6 +81,14 @@ private:
     PitchShifter shifter;
     int blockSize;
     Scale scale;
+
+    float correctionAmount = correctionAmountMax; // 1.0 = this project's original full-snap default
+    float retuneSpeedMs = retuneSpeedMsMin;        // 0 = this project's original instant-snap default
+    // Glide state: the shift actually applied last block, chased towards
+    // this block's (amount-blended) target by glideTowards(). Starts at 0
+    // rather than uninitialized/NaN so the very first block glides from
+    // "no correction" rather than an undefined value.
+    float previousAppliedShift = 0.0f;
 
     // Controls the phase vocoder's STFT hop size (step = frameSize /
     // overSampling), not the analysis window itself — affects

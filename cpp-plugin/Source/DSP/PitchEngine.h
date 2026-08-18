@@ -51,6 +51,18 @@ public:
 
     virtual void setScale (Scale newScale) noexcept = 0;
 
+    /// The classic Auto-Tune "correction amount" / "retune speed" controls
+    /// (docs/ROADMAP.md Phase 5) — default no-ops, not pure virtual, so an
+    /// engine that doesn't implement them (the Rust engine, currently —
+    /// same "C++ only for now" precedent already set for the PSOLA engine,
+    /// see docs/ROADMAP.md) needs no change at all to keep compiling.
+    /// supportsRetuneControls() lets the UI reflect that honestly
+    /// (disabling the controls) instead of silently accepting input that
+    /// does nothing.
+    virtual bool supportsRetuneControls() const noexcept { return false; }
+    virtual void setCorrectionAmount (float) noexcept {}
+    virtual void setRetuneSpeedMs (float) noexcept {}
+
     /// `samples.size()` must equal the `blockSize` passed to whichever
     /// factory function constructed this engine.
     virtual CorrectionResult process (const std::vector<float>& samples, double sampleRate) = 0;

@@ -2,6 +2,7 @@
 
 #include "DSP/CorrectorWorker.h"
 #include "DSP/PitchEngineRegistry.h"
+#include "DSP/RetuneSmoothing.h"
 #include "DSP/Scale.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <atomic>
@@ -45,6 +46,23 @@ public:
     pitchzazz::Scale getScale() const noexcept { return currentScale; }
     void setBypassed (bool shouldBypass) noexcept { bypassed.store (shouldBypass, std::memory_order_relaxed); }
     bool isBypassed() const noexcept { return bypassed.load (std::memory_order_relaxed); }
+
+    /// The classic Auto-Tune controls (docs/ROADMAP.md Phase 5) — forwarded
+    /// to the worker exactly like setScale above. Clamped by the DSP layer
+    /// itself (Corrector::setCorrectionAmount etc.), not just here, but
+    /// clamping at this boundary too means getCorrectionAmount()/
+    /// getRetuneSpeedMs() always reflect a valid value even before
+    /// prepareToPlay has constructed a worker to clamp on its behalf.
+    void setCorrectionAmount (float amount) noexcept;
+    float getCorrectionAmount() const noexcept { return currentCorrectionAmount; }
+    void setRetuneSpeedMs (float speedMs) noexcept;
+    float getRetuneSpeedMs() const noexcept { return currentRetuneSpeedMs; }
+
+    /// Whether the active engine implements the controls above — see
+    /// CorrectorWorker::getActiveSupportsRetuneControls's doc. False (not
+    /// true) before prepareToPlay has run, same "no worker yet" default
+    /// every other active-engine getter here uses.
+    bool activeEngineSupportsRetuneControls() const noexcept;
 
     /// Hot-swaps the active pitch-correction engine (docs/ROADMAP.md
     /// Phase 3) — `engineId` must be one of pitchzazz::availableEngines()'
@@ -123,6 +141,8 @@ private:
     pitchzazz::Scale currentScale;
     std::atomic<bool> bypassed { false };
     std::string currentEngineId;
+    float currentCorrectionAmount = pitchzazz::correctionAmountMax;
+    float currentRetuneSpeedMs = pitchzazz::retuneSpeedMsMin;
 
     // juce::Thread asserts (UB) if destroyed while still running. Hosts
     // aren't guaranteed to call releaseResources() before destroying the
