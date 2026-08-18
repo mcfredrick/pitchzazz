@@ -761,3 +761,24 @@ depth rather than requiring live narration to find them:
 The tour should be runnable both live (stepping through in an editor during
 the actual presentation) and asynchronously (a reviewer working through it
 alone), since it's not yet clear which format the interview will want.
+
+**Done, 2026-08-17.** Built as a single VS Code CodeTour file,
+`.tours/pitchzazz-walkthrough.tour`, with the 7 stops above in the exact
+order listed, each anchored at real, currently-existing code or docs
+(`crates/pitch-cli/src/main.rs` x3, `crates/pitch-core/src/scale.rs`,
+`docs/PERFORMANCE_LOG.md`, `cpp-plugin/Source/DSP/PitchEngine.h`,
+`docs/FINDINGS.md`) with self-contained description text — written to be
+read alone by a reviewer, not just narrated live, so no step says
+"explain here" without the actual explanation attached. Satisfies the
+"runnable both live and async" requirement above: CodeTour supports
+stepping through interactively in VS Code, or just opening the `.tour`
+JSON/reading the descriptions directly.
+
+Every step uses both a `line` guess and a `pattern` (a distinctive text
+snippet CodeTour uses to relocate the step if the file changes around
+it) rather than a bare line number — chosen deliberately, not as
+boilerplate: this tour was built while two other sessions were
+concurrently editing some of the same anchor files (`scale.rs`,
+`main.rs`, `PitchEngine.h`) for unrelated features, so line-number-only
+anchors would have been fragile by construction. All 7 anchors were
+verified against the actual file contents at build time, not assumed.
