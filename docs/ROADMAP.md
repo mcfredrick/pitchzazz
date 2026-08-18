@@ -529,17 +529,53 @@ silent permission denial (no crash, no error, no samples). See
   on voicing onset and on an engine switch rather than blending from a
   stale reading that belongs to a different note or engine. All 23 C++
   test cases (247 assertions) still pass.
-- **Additional musical modes, raised 2026-08-17, not started:** `Scale`
-  already generalizes to any diatonic mode as a fixed interval pattern
-  rotated by the tonic (not a lookup table) — `ScaleMode`'s own doc
-  comment is explicit that Ionian/Aeolian are the only two ported
-  "because that's all this project needs," a scope choice, not a
-  technical limit. Adding the other five church modes (Dorian, Phrygian,
-  Lydian, Mixolydian, Locrian) would be interval-pattern data, not a
-  structural change — genuinely cheap if prioritized. Tradeoff is
-  musical/UX (more dropdown options) rather than engineering risk, and
-  it's a creative-tool feature, not JD-critical per this file's own
-  prioritization criteria — queued, not scoped.
+- **Additional musical modes, raised 2026-08-17, done 2026-08-18:** `Scale`
+  already generalized to any diatonic mode as a fixed interval pattern
+  rotated by the tonic (not a lookup table), so adding the other five
+  church modes (Dorian, Phrygian, Lydian, Mixolydian, Locrian) turned out
+  to be exactly as cheap as flagged — confirmed, not assumed, by reading
+  `rust_music_theory`'s actual source (`~/.cargo/registry/src/`) rather
+  than trusting it has full church-mode coverage: `scale::Mode` already
+  has all seven variants, and `Scale::notes()`/`ScaleType::from_mode()`
+  handle them generically via interval rotation, so `pitch-core`'s
+  `scale.rs` needed zero algorithm changes. The actual work was
+  `crates/pitch-cli/src/main.rs`'s `--mode` parsing (extended to accept
+  all seven names) and, on the C++ side, `Scale.h`/`Scale.cpp` (five new
+  `ScaleMode` enum values + five new interval-pattern arrays, derived by
+  independently rotating the major scale's own step pattern from each
+  degree — cross-checked by construction, since rotating from the 6th
+  degree reproduces the pre-existing, independently-authored
+  `minorIntervals` exactly) and the GUI's mode combo box (7 items now,
+  major/minor kept at their original IDs 1/2 so existing muscle memory
+  still works).
+
+  **One real scope gap this surfaced, not anticipated when the item was
+  queued:** `RustCorrectorEngine`'s FFI bridge to the Rust engine only
+  ever passed a binary `is_minor: bool` across to Rust, not a full mode —
+  `Scale`/`ScaleMode` is shared across all three engines (unlike PSOLA,
+  which is deliberately C++-only), so leaving that bridge binary would
+  have meant picking e.g. Dorian while the Rust engine was active
+  silently corrected into the wrong scale, no crash, just wrong music —
+  exactly the class of silent-wrong-audio failure this project exists to
+  catch, not introduce. Fixed by widening the bridge
+  (`crates/pitch-core-ffi/src/lib.rs`) from `is_minor: bool` to a shared
+  `mode: u8` index convention (cxx can't share a Rust enum with C++
+  directly), mirrored explicitly — not via a `static_cast` that could
+  silently break if either enum's declaration order ever changes — in
+  `RustCorrectorEngine.cpp`'s new `toModeIndex()`. Not treated as a
+  `docs/FINDINGS.md` entry: no shipped behavior was ever wrong (Dorian
+  selection didn't exist until this same change), so this is scope
+  discovered and closed within one feature, not a bug found in existing
+  code.
+
+  New tests: one Dorian-vs-Ionian test per side (C major and C Dorian
+  share a tonic but differ at the 3rd/7th degrees, so this actually
+  exercises mode-rotation logic, unlike testing two scales that happen to
+  share the same pitch-class set). All Rust tests pass (7/7,
+  `cargo test --workspace`) and `cargo clippy --all-targets --workspace`
+  is clean; all C++ tests pass (33/33 cases, 272 assertions, up from
+  32/270 — the one new Dorian test — via the `Tests` target built
+  headlessly, no Xcode GUI).
 - **MIDI-controlled pitch target ("vocoder mode"), added 2026-08-17:**
   instead of (or in addition to) snapping to the nearest note in a fixed
   scale, let an incoming MIDI note set the target pitch directly —

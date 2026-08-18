@@ -8,6 +8,26 @@ namespace
     const char* const pitchClassNames[12] = { "C", "C#", "D", "D#", "E", "F",
                                                "F#", "G", "G#", "A", "A#", "B" };
 
+    // Single source of truth for modeBox's population, initial selection,
+    // and updateProcessorScale()'s ID-to-mode mapping — a scattered
+    // switch/ternary in three places would be an easy spot for the display
+    // order and the actual enum mapping to drift apart. ComboBox item IDs
+    // are 1-based, so item ID = array index + 1. Major/minor listed first
+    // (matches their original two hardcoded IDs 1/2, before the other five
+    // modes existed) rather than reordered into "modal brightness" order,
+    // so muscle memory from before this feature still selects the same
+    // two modes at the same IDs.
+    struct ModeEntry { pitchzazz::ScaleMode mode; const char* displayName; };
+    const ModeEntry modeEntries[7] = {
+        { pitchzazz::ScaleMode::major,      "Major" },
+        { pitchzazz::ScaleMode::minor,      "Minor" },
+        { pitchzazz::ScaleMode::dorian,     "Dorian" },
+        { pitchzazz::ScaleMode::phrygian,   "Phrygian" },
+        { pitchzazz::ScaleMode::lydian,     "Lydian" },
+        { pitchzazz::ScaleMode::mixolydian, "Mixolydian" },
+        { pitchzazz::ScaleMode::locrian,    "Locrian" }
+    };
+
     // "A3  220.5Hz", or "--" for hz <= 0 (unvoiced/silent/not yet
     // available) — shared formatting for both LCD readouts so "detected"
     // and "corrected" always read the same way.
@@ -38,10 +58,16 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     addAndMakeVisible (tonicLabel);
     addAndMakeVisible (tonicBox);
 
-    modeBox.addItem ("Major", 1);
-    modeBox.addItem ("Minor", 2);
-    modeBox.setSelectedId (processorRef.getScale().mode == pitchzazz::ScaleMode::major ? 1 : 2,
-                           juce::dontSendNotification);
+    for (int i = 0; i < 7; ++i)
+        modeBox.addItem (modeEntries[i].displayName, i + 1);
+    {
+        const auto currentMode = processorRef.getScale().mode;
+        int selectedId = 1; // falls back to Major if somehow not found below
+        for (int i = 0; i < 7; ++i)
+            if (modeEntries[i].mode == currentMode)
+                selectedId = i + 1;
+        modeBox.setSelectedId (selectedId, juce::dontSendNotification);
+    }
     modeBox.onChange = [this] { updateProcessorScale(); };
     addAndMakeVisible (modeLabel);
     addAndMakeVisible (modeBox);
@@ -282,7 +308,8 @@ void PitchzazzAudioProcessorEditor::updateRetuneControlsEnablement()
 void PitchzazzAudioProcessorEditor::updateProcessorScale()
 {
     const int tonicPitchClass = tonicBox.getSelectedId() - 1;
-    const auto mode = modeBox.getSelectedId() == 2 ? pitchzazz::ScaleMode::minor : pitchzazz::ScaleMode::major;
+    const int modeIndex = modeBox.getSelectedId() - 1;
+    const auto mode = (modeIndex >= 0 && modeIndex < 7) ? modeEntries[modeIndex].mode : pitchzazz::ScaleMode::major;
     processorRef.setScale ({ tonicPitchClass, mode });
 }
 
