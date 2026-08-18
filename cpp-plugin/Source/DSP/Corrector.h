@@ -9,10 +9,10 @@ namespace pitchzazz
 {
 
 /// Standard equal-temperament Hz -> fractional MIDI note number, A4 = 69 = 440Hz.
-float hzToMidi (float freqHz) noexcept;
+[[nodiscard]] float hzToMidi (float freqHz) noexcept;
 
 /// Inverse of hzToMidi.
-float midiToHz (float midi) noexcept;
+[[nodiscard]] float midiToHz (float midi) noexcept;
 
 /// Wall-clock cost of each stage of one Corrector::process() call, in
 /// microseconds. Mirrors pitch-core's StageTimings exactly — same field
@@ -56,12 +56,12 @@ public:
     void setScale (Scale newScale) noexcept { scale = newScale; }
 
     /// `samples.size()` must equal the `blockSize` passed to the constructor.
-    CorrectionResult process (const std::vector<float>& samples, double sampleRate);
+    [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate);
 
     /// Algorithmic pipeline latency, in samples — delegates to the
     /// shifter, since that's the sole contributor (see
     /// PitchShifter::getLatencySamples's doc).
-    int getLatencySamples() const noexcept { return shifter.getLatencySamples(); }
+    [[nodiscard]] int getLatencySamples() const noexcept { return shifter.getLatencySamples(); }
 
 private:
     PitchDetector detector;

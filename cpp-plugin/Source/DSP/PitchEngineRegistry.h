@@ -30,6 +30,6 @@ const std::vector<EngineDescriptor>& availableEngines();
 /// Constructs the engine registered under `id`, or nullptr if `id` isn't
 /// found (callers should treat that as a programming error — ids come
 /// from availableEngines(), not user text input).
-std::unique_ptr<PitchEngine> createEngine (const std::string& id, const EngineConfig& config);
+[[nodiscard]] std::unique_ptr<PitchEngine> createEngine (const std::string& id, const EngineConfig& config);
 
 } // namespace pitchzazz

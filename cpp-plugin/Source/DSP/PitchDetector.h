@@ -44,7 +44,7 @@ public:
     /// block's energy is below the power threshold — matches the Rust
     /// version's `unwrap_or(Pitch { frequency: 0.0, clarity: 0.0 })`
     /// fallback in corrector.rs.
-    DetectedPitch detect (const std::vector<float>& signal, double sampleRate);
+    [[nodiscard]] DetectedPitch detect (const std::vector<float>& signal, double sampleRate);
 
 private:
     int blockSize;

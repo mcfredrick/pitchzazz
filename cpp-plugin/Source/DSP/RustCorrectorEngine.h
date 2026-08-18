@@ -25,8 +25,8 @@ public:
 
     const char* getName() const noexcept override { return "Rust (FFI)"; }
     void setScale (Scale newScale) noexcept override;
-    CorrectionResult process (const std::vector<float>& samples, double sampleRate) override;
-    int getLatencySamples() const noexcept override { return (int) pitchzazz_rust::latency_samples (*corrector); }
+    [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate) override;
+    [[nodiscard]] int getLatencySamples() const noexcept override { return (int) pitchzazz_rust::latency_samples (*corrector); }
 
 private:
     rust::Box<pitchzazz_rust::RustCorrector> corrector;

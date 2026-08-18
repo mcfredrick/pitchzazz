@@ -80,7 +80,7 @@ public:
     /// several sample-rate/frequency combinations. Still meaningfully —
     /// just not dramatically — lower than the phase vocoder's fixed
     /// ~46-50ms window (docs/PERFORMANCE_LOG.md).
-    int getLatencySamples() const noexcept { return latencySamples; }
+    [[nodiscard]] int getLatencySamples() const noexcept { return latencySamples; }
 
 private:
     double sampleRate;

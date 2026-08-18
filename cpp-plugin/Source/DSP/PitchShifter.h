@@ -44,7 +44,7 @@ public:
     /// empirically confirmed (not just assumed) to equal the analysis
     /// frame size exactly, independent of block size or over-sampling;
     /// see docs/PERFORMANCE_LOG.md's "Measured pipeline latency" entry.
-    int getLatencySamples() const noexcept { return frameSize; }
+    [[nodiscard]] int getLatencySamples() const noexcept { return frameSize; }
 
 private:
     double sampleRate;

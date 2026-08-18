@@ -631,6 +631,58 @@ pass across the existing code, not a rewrite — the point is the
 walkthrough holding up to scrutiny on *every* file a reviewer might open,
 not just the ones freshly written.
 
+**Done, 2026-08-17.** A file-by-file pass over `cpp-plugin/Source/`,
+`cpp-plugin/benchmarks/`, and `cpp-plugin/tests/` against the checklist
+above. The codebase held up well — most of the checklist items (raw
+owning pointers, const-correctness, manual-loop-vs-range-for/`<algorithm>`,
+unnecessary copies) turned up nothing: constructors/setters already take
+`const&` where warranted, index loops found were all genuinely
+index-dependent (bin/sample-position math, not simple element iteration),
+and ownership was already `unique_ptr`-based almost everywhere. Two real,
+fixable categories did turn up, both applied:
+
+- **Own heap allocations via `std::unique_ptr`/`make_unique`, never a raw
+  `new` handed to `.reset()` or a bare owning pointer with a manual
+  `delete`** — clearer ownership and exception-safe by construction (a
+  `unique_ptr` cleans up even if code between construction and the old
+  manual `delete` throws; the manual version didn't). Two instances fixed:
+  `StandaloneApp.cpp`'s `mainWindow.reset (new
+  juce::StandaloneFilterWindow (...))` → `std::make_unique`, and
+  `tests/helpers/test_helpers.h`'s raw `editor` pointer with a manual
+  `delete` at the end of the function → a `unique_ptr` with a custom
+  deleter (needed anyway, since JUCE's `editorBeingDeleted()` must run
+  immediately before the delete, not just at some later point).
+- **Mark functions `noexcept`/`[[nodiscard]]` when their implementation
+  provably can't throw or their return value is never meaningful to
+  discard, applied consistently within a class, not just on the newest
+  code.** `PluginProcessor.h`'s inline getters (`isBypassed`, `getScale`)
+  were already `noexcept`, but eight sibling getters implemented
+  out-of-line in the `.cpp` (`getActiveEngineName`, `getActiveLatencyMs`,
+  `getLastDetectUs`/`getLastQuantizeUs`/`getLastShiftUs`,
+  `getLastDetectedHz`, `getLastSemitoneShift`, `getBudgetUs`) — every one
+  of them either an atomic load or simple arithmetic, none allocating —
+  weren't, an inconsistency within one class rather than a deliberate
+  choice. Separately, added `[[nodiscard]]` to pure query/result-producing
+  functions whose return value being silently discarded would be a bug,
+  not a style issue: `hzToMidi`/`midiToHz`/`nearestInScaleMidi`/
+  `Scale::containsPitchClass` (free/query functions), `createEngine`
+  (discarding it silently drops the constructed engine), `PitchDetector::
+  detect`, and `process()`/`getLatencySamples()` across `Corrector`,
+  `PSOLACorrector`, `PitchShifter`, `PSOLAPitchShifter`, the `PitchEngine`
+  interface, and all three engine implementations.
+
+No correctness bugs were spotted during the audit (the constraint was:
+if one turned up, note it rather than fix it inline — nothing to note
+this time). Verified zero behavior change: rebuilt the `Tests` target
+headlessly (Xcode-generator `cmake --build`, no GUI) and all 22 test
+cases / 243 assertions still pass; `Benchmarks` still builds clean in
+Release and a spot-check run (`Corrector::process cost at 44100Hz`) still
+executes and reports timings in the same order of magnitude as
+`docs/PERFORMANCE_LOG.md`'s existing numbers. See `cpp-plugin/CLAUDE.md`'s
+new "C++ code quality standards" section — the two categories above are
+now codified as durable rules there, not just a one-time cleanup, so new
+code doesn't reintroduce them.
+
 Before the actual presentation: set up a guided code walkthrough using one
 of the "code tour" style tools (e.g. the VS Code CodeTour extension and its
 `.tours` JSON format, or an equivalent) that steps through the codebase in

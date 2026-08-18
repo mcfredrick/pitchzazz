@@ -31,9 +31,9 @@ public:
     void setScale (Scale newScale) noexcept { scale = newScale; }
 
     /// `samples.size()` must equal the `blockSize` passed to the constructor.
-    CorrectionResult process (const std::vector<float>& samples, double sampleRate);
+    [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate);
 
-    int getLatencySamples() const noexcept { return shifter.getLatencySamples(); }
+    [[nodiscard]] int getLatencySamples() const noexcept { return shifter.getLatencySamples(); }
 
 private:
     PitchDetector detector;

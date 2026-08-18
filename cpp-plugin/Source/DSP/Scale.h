@@ -21,7 +21,7 @@ struct Scale
     ScaleMode mode = ScaleMode::major;
 
     /// True if `pitchClass` (0-11) is a member of this scale.
-    bool containsPitchClass (int pitchClass) const noexcept;
+    [[nodiscard]] bool containsPitchClass (int pitchClass) const noexcept;
 };
 
 /// Returns the nearest MIDI note (0-127) whose pitch class is in `scale`,
@@ -40,6 +40,6 @@ struct Scale
 /// first place.
 ///
 /// Returns `midiNote` unchanged if it is already in the scale.
-int nearestInScaleMidi (int midiNote, const Scale& scale) noexcept;
+[[nodiscard]] int nearestInScaleMidi (int midiNote, const Scale& scale) noexcept;
 
 } // namespace pitchzazz

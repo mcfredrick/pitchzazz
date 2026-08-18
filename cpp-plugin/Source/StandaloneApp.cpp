@@ -74,11 +74,11 @@ public:
 
     void initialise (const juce::String&) override
     {
-        mainWindow.reset (new juce::StandaloneFilterWindow (
+        mainWindow = std::make_unique<juce::StandaloneFilterWindow> (
             getApplicationName(),
             juce::LookAndFeel::getDefaultLookAndFeel().findColour (
                 juce::ResizableWindow::backgroundColourId),
-            nullptr, true));
+            nullptr, true);
 
         mainWindow->setVisible (true);
 

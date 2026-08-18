@@ -53,7 +53,7 @@ public:
 
     /// `samples.size()` must equal the `blockSize` passed to whichever
     /// factory function constructed this engine.
-    virtual CorrectionResult process (const std::vector<float>& samples, double sampleRate) = 0;
+    [[nodiscard]] virtual CorrectionResult process (const std::vector<float>& samples, double sampleRate) = 0;
 
     /// This engine's algorithmic pipeline latency, in samples — for
     /// display and for AudioProcessor::setLatencySamples(), so the host's
@@ -63,7 +63,7 @@ public:
     /// between engines (it does, between the two built in — see
     /// docs/COMPARISON.md's FFT-size-constraints section), which is
     /// exactly why this is per-engine rather than a plugin-wide constant.
-    virtual int getLatencySamples() const noexcept = 0;
+    [[nodiscard]] virtual int getLatencySamples() const noexcept = 0;
 };
 
 } // namespace pitchzazz

@@ -55,7 +55,7 @@ public:
     /// keeps this dropout-free.
     void setEngine (const std::string& engineId);
     const std::vector<pitchzazz::EngineDescriptor>& getAvailableEngines() const { return pitchzazz::availableEngines(); }
-    juce::String getActiveEngineName() const;
+    juce::String getActiveEngineName() const noexcept;
 
     /// For the GUI's latency/processing-time display (docs/ROADMAP.md
     /// Phase 4) — all 0 before prepareToPlay has run. getActiveLatencyMs
@@ -63,22 +63,22 @@ public:
     /// entry), NOT the same quantity as the processing-time getters below
     /// — see PitchEngine::getLatencySamples's doc for why these don't sum
     /// with anything else to produce it.
-    double getActiveLatencyMs() const;
-    double getLastDetectUs() const;
-    double getLastQuantizeUs() const;
-    double getLastShiftUs() const;
+    double getActiveLatencyMs() const noexcept;
+    double getLastDetectUs() const noexcept;
+    double getLastQuantizeUs() const noexcept;
+    double getLastShiftUs() const noexcept;
 
     /// Most recent detected pitch (0 if unvoiced/silent) and the
     /// semitone shift applied to correct it, for the GUI's live pitch
     /// display — same all-0-before-prepareToPlay and eventual-consistency
     /// contract as the getters above.
-    float getLastDetectedHz() const;
-    float getLastSemitoneShift() const;
+    float getLastDetectedHz() const noexcept;
+    float getLastSemitoneShift() const noexcept;
 
     /// The real-time processing budget for one block, in microseconds —
     /// for the GUI's segmented processing-time meter, so it can show
     /// stage cost relative to the budget, not just relative to itself.
-    double getBudgetUs() const;
+    double getBudgetUs() const noexcept;
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override;

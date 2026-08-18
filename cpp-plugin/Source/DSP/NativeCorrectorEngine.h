@@ -15,8 +15,8 @@ public:
 
     const char* getName() const noexcept override { return "Native C++"; }
     void setScale (Scale newScale) noexcept override;
-    CorrectionResult process (const std::vector<float>& samples, double sampleRate) override;
-    int getLatencySamples() const noexcept override { return corrector.getLatencySamples(); }
+    [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate) override;
+    [[nodiscard]] int getLatencySamples() const noexcept override { return corrector.getLatencySamples(); }
 
 private:
     Corrector corrector;

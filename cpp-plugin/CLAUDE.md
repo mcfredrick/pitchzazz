@@ -240,5 +240,48 @@ When completing a large feature on JUCE-Plugin-Starter or juce-dev where some wo
 
 This prevents losing track of deferred work that lives in proposal docs or progress files that get stale.
 
+## C++ code quality standards
+
+Distilled from a whole-codebase audit (`../docs/ROADMAP.md`'s
+"Modern C++ best-practices audit", 2026-08-17) against dated patterns a
+Sr Audio Core reviewer would flag. Only the categories that actually had
+multiple real instances are rules here — most of the audit's checklist
+(raw owning pointers, const-correctness, manual-loop-vs-range-for,
+unnecessary copies) turned up nothing to fix, so it isn't repeated below
+as a rule.
+
+1. **Own heap-allocated objects via `std::unique_ptr`/`std::make_unique`,
+   never a raw `new` handed to `.reset()` or a bare owning pointer cleaned
+   up with a manual `delete`.** Two real instances found and fixed:
+   `StandaloneApp.cpp`'s `mainWindow.reset (new
+   juce::StandaloneFilterWindow (...))`, and a test helper's raw
+   `editor` pointer deleted by hand at the end of the function. Why: a
+   `unique_ptr` cleans up correctly even if something between construction
+   and the old manual `delete` throws or early-returns — the manual
+   version doesn't, and that gap is exactly the kind of "looks fine until
+   an edge case hits it" bug this project exists to catch elsewhere in the
+   audio path.
+2. **Mark a function `noexcept` when its actual implementation provably
+   can't throw, and do it consistently within a class — not just on
+   whichever methods were newest.** Found on `PluginProcessor`: its
+   inline getters (`isBypassed`, `getScale`) were already `noexcept`, but
+   eight sibling getters implemented out-of-line in the `.cpp` (atomic
+   loads and simple arithmetic, nothing allocating) weren't. Why:
+   inconsistent `noexcept` within one class reads as accidental, not
+   deliberate, and undersells a real property of the code — these getters
+   genuinely can't throw, callers (and the compiler, in a `noexcept`
+   context) should be able to rely on that.
+3. **Mark pure query/result-producing functions `[[nodiscard]]` when
+   silently discarding their return value would be a bug, not a style
+   choice.** Applied to `hzToMidi`/`midiToHz`/`nearestInScaleMidi`/
+   `Scale::containsPitchClass`, `PitchEngineRegistry::createEngine`,
+   `PitchDetector::detect`, and `process()`/`getLatencySamples()` across
+   `Corrector`, `PSOLACorrector`, `PitchShifter`, `PSOLAPitchShifter`, the
+   `PitchEngine` interface, and its three implementations. Why: for a
+   function like `createEngine()` or `process()`, discarding the return
+   value isn't a no-op — it throws away a constructed engine or a whole
+   block of corrected audio — so a caller that does it by mistake (a typo,
+   a copy-pasted call site) should get a compile error, not a silent bug.
+
 ## Additional Project Info
 See @README.md for general project information.

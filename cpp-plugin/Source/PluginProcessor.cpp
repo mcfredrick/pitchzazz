@@ -252,14 +252,14 @@ void PitchzazzAudioProcessor::setEngine (const std::string& engineId)
     }
 }
 
-juce::String PitchzazzAudioProcessor::getActiveEngineName() const
+juce::String PitchzazzAudioProcessor::getActiveEngineName() const noexcept
 {
     if (worker != nullptr)
         return worker->getActiveEngineName();
     return {};
 }
 
-double PitchzazzAudioProcessor::getActiveLatencyMs() const
+double PitchzazzAudioProcessor::getActiveLatencyMs() const noexcept
 {
     if (worker == nullptr)
         return 0.0;
@@ -269,14 +269,14 @@ double PitchzazzAudioProcessor::getActiveLatencyMs() const
     return ((double) worker->getActiveLatencySamples() / sr) * 1000.0;
 }
 
-double PitchzazzAudioProcessor::getLastDetectUs() const { return worker != nullptr ? worker->getLastDetectUs() : 0.0; }
-double PitchzazzAudioProcessor::getLastQuantizeUs() const { return worker != nullptr ? worker->getLastQuantizeUs() : 0.0; }
-double PitchzazzAudioProcessor::getLastShiftUs() const { return worker != nullptr ? worker->getLastShiftUs() : 0.0; }
+double PitchzazzAudioProcessor::getLastDetectUs() const noexcept { return worker != nullptr ? worker->getLastDetectUs() : 0.0; }
+double PitchzazzAudioProcessor::getLastQuantizeUs() const noexcept { return worker != nullptr ? worker->getLastQuantizeUs() : 0.0; }
+double PitchzazzAudioProcessor::getLastShiftUs() const noexcept { return worker != nullptr ? worker->getLastShiftUs() : 0.0; }
 
-float PitchzazzAudioProcessor::getLastDetectedHz() const { return worker != nullptr ? worker->getLastDetectedHz() : 0.0f; }
-float PitchzazzAudioProcessor::getLastSemitoneShift() const { return worker != nullptr ? worker->getLastSemitoneShift() : 0.0f; }
+float PitchzazzAudioProcessor::getLastDetectedHz() const noexcept { return worker != nullptr ? worker->getLastDetectedHz() : 0.0f; }
+float PitchzazzAudioProcessor::getLastSemitoneShift() const noexcept { return worker != nullptr ? worker->getLastSemitoneShift() : 0.0f; }
 
-double PitchzazzAudioProcessor::getBudgetUs() const
+double PitchzazzAudioProcessor::getBudgetUs() const noexcept
 {
     const double sr = getSampleRate();
     if (sr <= 0.0)
