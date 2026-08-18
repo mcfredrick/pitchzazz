@@ -645,9 +645,19 @@ silent permission denial (no crash, no error, no samples). See
   skips the `holdLastNote`/`scaleQuantize`-equivalence cases, already
   covered identically by the shared `MidiFallbackMode` logic on the
   native engine's side) — full suite now 52 cases / 2349 assertions, all
-  passing. `pluginval` strictness 5 passes on the rebuilt
-  VST3. No entry in `docs/FINDINGS.md` — the discontinuity risk above was
-  designed around proactively, not found-and-fixed after shipping.
+  passing. `pluginval` strictness 5 passes on the rebuilt VST3. The
+  discontinuity risk above was designed around proactively, not
+  found-and-fixed after shipping, so no `docs/FINDINGS.md` entry for
+  that specific risk — but a second, real bug *was* found by validation:
+  `auval` (not `pluginval`, which has no per-format AU-type concept to
+  catch this) flagged the AU build's declared component type as still
+  `kAudioUnitType_Effect` ('aufx') after `NEEDS_MIDI_INPUT` flipped to
+  `TRUE` — Apple's convention wants `kAudioUnitType_MusicEffect` ('aumf')
+  for an audio effect that also accepts MIDI. Fixed in `CMakeLists.txt`;
+  `auval -v aumf PIHZ MAFR` re-run clean. Full story: `docs/FINDINGS.md`
+  #22 — the same *class* of AU-type mismatch as finding #8, mirror image
+  of it, and direct fresh evidence for this project's own "one validator
+  isn't enough" thesis (finding #11, and the code tour's stop 8).
 - **Expose `overSampling` as a user-facing quality control, added
   2026-08-17:** it meaningfully affects phase-vocoder reconstruction
   quality (`docs/PERFORMANCE_LOG.md`'s "OVER_SAMPLING re-evaluated"
