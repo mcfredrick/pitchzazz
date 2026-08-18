@@ -1,19 +1,19 @@
 {
   "$schema": "https://aka.ms/codetour-schema",
   "title": "pitchzazz: real-time audio engineering walkthrough",
-  "description": "Seven stops demonstrating real-time-systems understanding, DSP correctness debugging, and a controlled two-language performance comparison. Each step is short enough to say out loud during a live demo; the last line of each points at the doc section with the full depth for anyone reading async. Steps use both a line-number guess and a text `pattern` CodeTour can use to relocate the step if the surrounding file has changed since this tour was written.",
+  "description": "Eight stops demonstrating real-time-systems understanding, DSP correctness debugging, and a controlled two-language performance comparison. Each step is short enough to say out loud during a live demo; the last line of each points at the doc section with the full depth for anyone reading async. Steps use both a line-number guess and a text `pattern` CodeTour can use to relocate the step if the surrounding file has changed since this tour was written. Three steps include a diagram (`.tours/assets/*.svg`) for the mechanisms that are easier to see than to narrate.",
   "steps": [
     {
       "title": "1. Never block, allocate, or lock on the audio thread",
       "file": "crates/pitch-cli/src/main.rs",
-      "line": 235,
+      "line": 242,
       "pattern": "Input callback: copy into the ring buffer",
-      "description": "This is the actual audio-input callback: copy into a lock-free ring buffer and return. Nothing else. The original prototype broke this rule three ways in ten lines — a mutex lock, a blocking channel send, and a per-callback heap allocation, all inside the callback.\n\nFull story: `docs/ARCHITECTURE.md`'s \"What the original prototype got wrong\" section."
+      "description": "This is the actual audio-input callback: copy into a lock-free ring buffer and return. Nothing else. The original prototype broke this rule three ways in ten lines — a mutex lock, a blocking channel send, and a per-callback heap allocation, all inside the callback.\n\n![Producer/consumer pipeline: audio callbacks only push/pop a lock-free ring buffer; the worker thread does all the real work](assets/realtime-safety.svg)\n\nFull story: `docs/ARCHITECTURE.md`'s \"What the original prototype got wrong\" section."
     },
     {
       "title": "2. Auditing `ringbuf`'s lock-free claim",
       "file": "crates/pitch-cli/src/main.rs",
-      "line": 169,
+      "line": 176,
       "pattern": "HeapRb::<f32>::new(ring_capacity).split()",
       "description": "Before trusting this line, `ringbuf`'s actual source was read (not its docs) to confirm `.split()` really gives lock-free atomic-index Producer/Consumer halves, not a mutex in disguise. That's the standing rule here: audit any dependency's real source before letting it run on the audio thread.\n\nFull story: `docs/ARCHITECTURE.md`'s Dependency Audit section."
     },
@@ -27,7 +27,7 @@
     {
       "title": "4. Decoupling DSP block size from the host's callback size",
       "file": "crates/pitch-cli/src/main.rs",
-      "line": 194,
+      "line": 201,
       "pattern": "if filled < BLOCK_SIZE",
       "description": "The pitch detector needs a fixed block size; audio hosts don't guarantee one. This accumulates whatever the host hands the callback into a fixed-size buffer and only runs one correction pass once exactly `BLOCK_SIZE` samples are ready — decoupling the two.\n\nThe C++/JUCE port applies the identical pattern (`CorrectorWorker.cpp`'s `analysisBuffer`). Full story: this file's module doc."
     },
@@ -39,14 +39,21 @@
       "description": "First live run: 40-60% over the real-time budget. Per-stage timing (not a single top-line number) showed it was entirely the pitch-shift stage — a leftover oversampling factor of 32 that had never been independently measured. Dropping it to 8 fixed it with margin.\n\nFull story: the four chained entries starting here, ending in a measured (not estimated) end-to-end latency number."
     },
     {
-      "title": "6. Hot-swap architecture + the 20-30x illusion",
-      "file": "cpp-plugin/Source/DSP/CorrectorWorker.cpp",
-      "line": 60,
-      "pattern": "void CorrectorWorker::requestEngineSwap",
-      "description": "A new pitch-correction engine (Rust, C++ phase vocoder, or C++ TD-PSOLA) is handed off via one atomic pointer exchange, picked up between blocks, never mid-`process()`. The first swap discarded the outgoing engine's warmed-up internal state, causing an audible glitch no unit test or plugin validator caught — `docs/FINDINGS.md` #14.\n\nSeparately: a first-pass Rust-vs-C++ benchmark looked 20-30x apart. It was a debug-vs-release build mismatch, not a language difference — full numbers in `docs/COMPARISON.md`."
+      "title": "6. Two ways to shift pitch: phase vocoder vs. TD-PSOLA",
+      "file": "cpp-plugin/Source/DSP/PitchEngineRegistry.cpp",
+      "line": 9,
+      "pattern": "const std::vector<EngineDescriptor>& availableEngines()",
+      "description": "Both algorithms are registered right here, hot-swappable at runtime. They solve the same problem in genuinely different domains — one reasons about frequency, the other about time.\n\n![Phase vocoder shifts pitch by moving FFT bins, with latency fixed to the analysis window; TD-PSOLA shifts pitch by re-spacing time-domain grains at pitch marks, with latency bounded but pitch-dependent](assets/pitch-shift-algorithms.svg)\n\nThe measured payoff: TD-PSOLA's latency is ~19-46% lower depending on rate, because it scales with pitch period, not a fixed sample count. The cost: a real, disclosed reconstruction artifact on non-stationary audio — full trade-off in `docs/PERFORMANCE_LOG.md`'s TD-PSOLA entries and `docs/FINDINGS.md` #18-20."
     },
     {
-      "title": "7. One validator isn't enough",
+      "title": "7. Hot-swap architecture + the 20-30x illusion",
+      "file": "cpp-plugin/Source/DSP/CorrectorWorker.cpp",
+      "line": 71,
+      "pattern": "void CorrectorWorker::requestEngineSwap",
+      "description": "A new pitch-correction engine (Rust, C++ phase vocoder, or C++ TD-PSOLA) is handed off via one atomic pointer exchange, picked up between blocks, never mid-`process()`.\n\n![Hot-swap: a new engine is stored into one atomic pointer, picked up by the worker thread between blocks, then blended in via a crossfade over four blocks](assets/hot-swap.svg)\n\nThe first swap discarded the outgoing engine's warmed-up internal state, causing an audible glitch no unit test or plugin validator caught — `docs/FINDINGS.md` #14. Separately: a first-pass Rust-vs-C++ benchmark looked 20-30x apart. It was a debug-vs-release build mismatch, not a language difference — full numbers in `docs/COMPARISON.md`."
+    },
+    {
+      "title": "8. One validator isn't enough",
       "file": "docs/FINDINGS.md",
       "line": 28,
       "pattern": "juce::Thread` destructor asserts (UB) if destroyed while still running",

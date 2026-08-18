@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 200" role="img" aria-label="Engine hot-swap: a new engine is stored into one atomic pointer, picked up by the worker thread between blocks, then blended in via a crossfade over four blocks.">
+  <title>Hot-swap: atomic pointer handoff</title>
+  <defs>
+    <marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f2328"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="200" fill="#f7f6f3"/>
+
+  <rect x="20" y="65" width="150" height="70" rx="8" fill="#ffffff" stroke="#1f2328" stroke-width="1.5"/>
+  <text x="95" y="94" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#1f2328">UI: pick engine</text>
+  <text x="95" y="112" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#555">(message thread)</text>
+
+  <rect x="210" y="65" width="170" height="70" rx="8" fill="#ffffff" stroke="#1f2328" stroke-width="1.5"/>
+  <text x="295" y="94" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#1f2328">requestEngineSwap()</text>
+  <text x="295" y="112" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#555">construct off-thread</text>
+
+  <rect x="420" y="60" width="150" height="80" rx="8" fill="#ffffff" stroke="#c2410c" stroke-width="2.5"/>
+  <text x="495" y="92" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#1f2328">pendingEngine</text>
+  <text x="495" y="110" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#c2410c">atomic pointer</text>
+
+  <rect x="610" y="65" width="160" height="70" rx="8" fill="#ffffff" stroke="#1f2328" stroke-width="1.5"/>
+  <text x="690" y="94" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#1f2328">Worker, next block</text>
+  <text x="690" y="112" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#555">exchange (acquire)</text>
+
+  <rect x="810" y="65" width="170" height="70" rx="8" fill="#ffffff" stroke="#1f2328" stroke-width="1.5"/>
+  <text x="895" y="94" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#1f2328">Crossfade, 4 blocks</text>
+  <text x="895" y="112" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#555">old &#8594; new, equal-power</text>
+
+  <line x1="170" y1="100" x2="206" y2="100" stroke="#1f2328" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <line x1="380" y1="100" x2="416" y2="100" stroke="#1f2328" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <text x="398" y="88" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#1f2328">store</text>
+  <text x="398" y="145" text-anchor="middle" font-family="sans-serif" font-size="10" font-style="italic" fill="#c2410c">release</text>
+
+  <line x1="570" y1="100" x2="606" y2="100" stroke="#1f2328" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <text x="588" y="88" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#1f2328">load</text>
+  <text x="588" y="145" text-anchor="middle" font-family="sans-serif" font-size="10" font-style="italic" fill="#c2410c">acquire</text>
+
+  <line x1="770" y1="100" x2="806" y2="100" stroke="#1f2328" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <text x="788" y="88" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#1f2328">swap active</text>
+
+  <text x="495" y="175" text-anchor="middle" font-family="sans-serif" font-size="11" font-style="italic" fill="#555">never blocks the audio thread, never touched mid-process()</text>
+</svg>
