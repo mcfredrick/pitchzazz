@@ -24,6 +24,7 @@ CorrectorWorker::CorrectorWorker (int blockSizeIn, double sampleRateIn, std::uni
     activeEngineName.store (engine->getName(), std::memory_order_relaxed);
     activeLatencySamples.store (engine->getLatencySamples(), std::memory_order_relaxed);
     activeSupportsRetuneControls.store (engine->supportsRetuneControls(), std::memory_order_relaxed);
+    activeSupportsGrainWidthControl.store (engine->supportsGrainWidthControl(), std::memory_order_relaxed);
 }
 
 CorrectorWorker::~CorrectorWorker()
@@ -55,6 +56,16 @@ void CorrectorWorker::setRetuneSpeedMs (float speedMs) noexcept
 bool CorrectorWorker::getActiveSupportsRetuneControls() const noexcept
 {
     return activeSupportsRetuneControls.load (std::memory_order_relaxed);
+}
+
+void CorrectorWorker::setGrainWidthMultiplier (float multiplier) noexcept
+{
+    pendingGrainWidthMultiplier.store (multiplier, std::memory_order_relaxed);
+}
+
+bool CorrectorWorker::getActiveSupportsGrainWidthControl() const noexcept
+{
+    return activeSupportsGrainWidthControl.load (std::memory_order_relaxed);
 }
 
 void CorrectorWorker::requestEngineSwap (std::unique_ptr<PitchEngine> newEngine) noexcept
@@ -163,9 +174,11 @@ void CorrectorWorker::run()
                              static_cast<ScaleMode> (pendingMode.load (std::memory_order_relaxed)) };
         const float correctionAmount = pendingCorrectionAmount.load (std::memory_order_relaxed);
         const float retuneSpeedMs = pendingRetuneSpeedMs.load (std::memory_order_relaxed);
+        const float grainWidthMultiplier = pendingGrainWidthMultiplier.load (std::memory_order_relaxed);
         engine->setScale (scale);
         engine->setCorrectionAmount (correctionAmount);
         engine->setRetuneSpeedMs (retuneSpeedMs);
+        engine->setGrainWidthMultiplier (grainWidthMultiplier);
 
         if (crossfadeEngine != nullptr)
         {
@@ -181,6 +194,7 @@ void CorrectorWorker::run()
             crossfadeEngine->setScale (scale);
             crossfadeEngine->setCorrectionAmount (correctionAmount);
             crossfadeEngine->setRetuneSpeedMs (retuneSpeedMs);
+            crossfadeEngine->setGrainWidthMultiplier (grainWidthMultiplier);
             const auto oldResult = engine->process (analysisBuffer, sampleRate);
             const auto newResult = crossfadeEngine->process (analysisBuffer, sampleRate);
 
@@ -230,6 +244,7 @@ void CorrectorWorker::run()
                 activeEngineName.store (engine->getName(), std::memory_order_relaxed);
                 activeLatencySamples.store (engine->getLatencySamples(), std::memory_order_relaxed);
                 activeSupportsRetuneControls.store (engine->supportsRetuneControls(), std::memory_order_relaxed);
+                activeSupportsGrainWidthControl.store (engine->supportsGrainWidthControl(), std::memory_order_relaxed);
             }
         }
         else

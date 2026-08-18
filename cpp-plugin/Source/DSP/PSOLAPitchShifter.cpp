@@ -15,18 +15,29 @@ PSOLAPitchShifter::PSOLAPitchShifter (double sampleRateIn)
 {
     maxPeriodSamples = (int) std::ceil (sampleRate / (double) minHz);
 
+    // Worst-case half-width across both the lowest detectable pitch and
+    // the widest the grain-width multiplier can ever be set to — see the
+    // header's doc on maxHalfWidthSamples. grainWidthMultiplierMax > 1.0
+    // by construction (see PSOLAPitchShifter.h), so this is always >=
+    // maxPeriodSamples, never smaller.
+    maxHalfWidthSamples = (int) std::ceil ((double) maxPeriodSamples * (double) grainWidthMultiplierMax);
+
     // Output is read from a fixed tap `latencySamples` behind the write
-    // head — see shiftPitch()'s doc for the derivation: one period of
-    // lookahead to fill a symmetric grain around a mark, plus one more
-    // period before the accumulator slot a mark could still touch has
-    // definitely been fully written. Confirmed exact (not just derived)
-    // by benchmarks/PSOLALatencyProbe.cpp's onset probe across several
+    // head — see shiftPitch()'s doc for the derivation: one grain
+    // half-width of lookahead to fill a symmetric grain around a mark,
+    // plus one more half-width before the accumulator slot a mark could
+    // still touch has definitely been fully written (generalized from
+    // "period" to "half-width" once grain width became a multiplier of
+    // the period rather than always equal to it — at the 1.0x default
+    // multiplier this reduces to exactly the original 2*maxPeriodSamples
+    // formula). Confirmed exact (not just derived) at the 1.0x default by
+    // benchmarks/PSOLALatencyProbe.cpp's onset probe across several
     // sample-rate/frequency combinations — matched to the sample at every
     // one once placeGrainAt()'s floor-based read position got an epsilon
     // guard (see that function's comment for the real bug that masked as
     // a latency-derivation problem for one specific combination before
     // that fix).
-    latencySamples = 2 * maxPeriodSamples;
+    latencySamples = 2 * maxHalfWidthSamples;
 
     // Generous, fixed headroom on top of the theoretical minimum (rather
     // than tightly sizing to exactly what's needed) — cheap in memory
@@ -36,6 +47,11 @@ PSOLAPitchShifter::PSOLAPitchShifter (double sampleRateIn)
     history.assign ((size_t) latencySamples + bufferMargin, 0.0f);
     accumulator.assign ((size_t) latencySamples + bufferMargin, 0.0f);
     accumulatorWeight.assign (accumulator.size(), 0.0f);
+
+    // See grainWindow's doc: reserved once, to the worst case, so a
+    // grain-width multiplier change at runtime can never force a
+    // reallocation here.
+    grainWindow.reserve ((size_t) (2 * maxHalfWidthSamples + 1));
 }
 
 void PSOLAPitchShifter::updatePeriodEstimate (float detectedHz) noexcept
@@ -52,13 +68,16 @@ void PSOLAPitchShifter::updatePeriodEstimate (float detectedHz) noexcept
 
 void PSOLAPitchShifter::placeGrainAt (double synthesisMarkPos)
 {
-    // Grain half-width is the *original* (unshifted) period, not the
-    // shifted target — this is the actual mechanism by which PSOLA
-    // preserves formants while changing pitch: spacing between
-    // consecutive synthesis marks sets perceived pitch, grain width sets
-    // the spectral envelope, and those are independent knobs here on
-    // purpose.
-    const int halfWidth = std::clamp ((int) std::llround (periodSamples), 1, maxPeriodSamples);
+    // Grain half-width is the *original* (unshifted) period — scaled by
+    // grainWidthMultiplier, the creative control (docs/ROADMAP.md Phase
+    // 5) that deliberately trades away some of the formant-preservation
+    // property this decoupling exists for, see the header's doc — not the
+    // shifted target: spacing between consecutive synthesis marks sets
+    // perceived pitch, grain width sets the spectral envelope, and those
+    // are independent knobs here on purpose. Clamped to maxHalfWidthSamples
+    // (not maxPeriodSamples), the buffer/latency sizing's actual worst
+    // case once the multiplier can move halfWidth past one full period.
+    const int halfWidth = std::clamp ((int) std::llround (periodSamples * (double) grainWidthMultiplier), 1, maxHalfWidthSamples);
 
     // The actual pitch-shift mechanism: READ position and WRITE position
     // are deliberately *different*. Content always comes from the most
@@ -136,11 +155,16 @@ void PSOLAPitchShifter::shiftPitch (float detectedHz, float semitoneShift,
 {
     updatePeriodEstimate (detectedHz);
 
-    // Precomputed once per call (not per grain): periodSamples is fixed
-    // for the whole call already (locally-stationary-pitch simplification
-    // documented in the class doc), so every grain fired during this call
-    // uses the identical window.
-    const int halfWidth = std::clamp ((int) std::llround (periodSamples), 1, maxPeriodSamples);
+    // Precomputed once per call (not per grain): periodSamples and
+    // grainWidthMultiplier are both fixed for the whole call already
+    // (locally-stationary-pitch simplification documented in the class
+    // doc — the multiplier only ever changes between shiftPitch() calls,
+    // via setGrainWidthMultiplier()), so every grain fired during this
+    // call uses the identical window. Must match placeGrainAt()'s own
+    // halfWidth computation exactly (same formula, same members) — they
+    // stay in sync because both derive from the same periodSamples/
+    // grainWidthMultiplier state, not because either calls the other.
+    const int halfWidth = std::clamp ((int) std::llround (periodSamples * (double) grainWidthMultiplier), 1, maxHalfWidthSamples);
     grainWindow.assign ((size_t) (2 * halfWidth + 1), 0.0f);
     for (int k = 0; k < (int) grainWindow.size(); ++k)
         grainWindow[(size_t) k] = 0.5f - 0.5f * std::cos (2.0f * pi * (float) k / (float) (grainWindow.size() - 1));
@@ -153,14 +177,16 @@ void PSOLAPitchShifter::shiftPitch (float detectedHz, float semitoneShift,
         history[(size_t) (totalSamplesIn % (long long) history.size())] = input[i];
         ++totalSamplesIn;
 
-        // A mark is eligible once its full grain (mark ± periodSamples)
-        // is entirely within already-written history — this is the only
-        // place lookahead is actually spent. Still correct with
-        // placeGrainAt's floor-based read position: since the actual read
-        // position is always <= this synthesis mark's own position (floor
-        // rounds down, never up), this check is a safe — if occasionally
-        // very slightly conservative — bound on the read requirement too.
-        while (nextMarkPos + periodSamples <= (double) (totalSamplesIn - 1))
+        // A mark is eligible once its full grain (mark ± halfWidth, using
+        // *this call's* actual halfWidth — not periodSamples, now that
+        // grainWidthMultiplier can make those different) is entirely
+        // within already-written history — this is the only place
+        // lookahead is actually spent. Still correct with placeGrainAt's
+        // floor-based read position: since the actual read position is
+        // always <= this synthesis mark's own position (floor rounds
+        // down, never up), this check is a safe — if occasionally very
+        // slightly conservative — bound on the read requirement too.
+        while (nextMarkPos + halfWidth <= (double) (totalSamplesIn - 1))
         {
             placeGrainAt (nextMarkPos);
             nextMarkPos += synthesisSpacing;
@@ -168,9 +194,9 @@ void PSOLAPitchShifter::shiftPitch (float detectedHz, float semitoneShift,
 
         // Fixed-delay-line read: position (totalSamplesIn - 1 -
         // latencySamples) is guaranteed safe because latencySamples uses
-        // the worst-case (longest possible) period, and no mark can ever
-        // reach farther back than periodSamples <= maxPeriodSamples from
-        // wherever nextMarkPos currently is.
+        // the worst-case (longest possible) half-width, and no mark can
+        // ever reach farther back than halfWidth <= maxHalfWidthSamples
+        // from wherever nextMarkPos currently is.
         const long long readPos = totalSamplesIn - 1 - (long long) latencySamples;
         if (readPos >= 0)
         {

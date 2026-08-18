@@ -41,6 +41,13 @@ public:
     void setCorrectionAmount (float amount) noexcept { correctionAmount = juce::jlimit (correctionAmountMin, correctionAmountMax, amount); }
     void setRetuneSpeedMs (float speedMs) noexcept { retuneSpeedMs = juce::jlimit (retuneSpeedMsMin, retuneSpeedMsMax, speedMs); }
 
+    /// PSOLA-only "grain width" creative control (docs/ROADMAP.md Phase 5,
+    /// item 2) — a thin forward to the shifter, which owns the actual
+    /// clamping/buffer-sizing implications (PSOLAPitchShifter.h). No
+    /// phase-vocoder equivalent exists (Corrector has no matching setter)
+    /// since a phase vocoder has no concept of "grain."
+    void setGrainWidthMultiplier (float multiplier) noexcept { shifter.setGrainWidthMultiplier (multiplier); }
+
     /// `samples.size()` must equal the `blockSize` passed to the constructor.
     [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate);
 

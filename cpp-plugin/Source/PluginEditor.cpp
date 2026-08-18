@@ -94,6 +94,7 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
             processorRef.setEngine (availableEngines[(size_t) index].id);
             resetSmoothingOnNextTick = true;
             updateRetuneControlsEnablement();
+            updateGrainWidthControlEnablement();
         }
     };
     addAndMakeVisible (engineLabel);
@@ -120,6 +121,19 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     retuneSpeedSlider.onValueChange = [this] { processorRef.setRetuneSpeedMs ((float) retuneSpeedSlider.getValue()); };
     addAndMakeVisible (retuneSpeedLabel);
     addAndMakeVisible (retuneSpeedSlider);
+
+    // "x" suffix, not "%"/"ms" like the two above — this is a literal
+    // multiplier on the grain half-width, and showing the raw number the
+    // DSP layer actually uses (PSOLAPitchShifter.h's grainWidthMultiplier)
+    // is more meaningful here than translating it into some other unit.
+    grainWidthSlider.setRange ((double) pitchzazz::grainWidthMultiplierMin,
+                                (double) pitchzazz::grainWidthMultiplierMax, 0.01);
+    grainWidthSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 48, 20);
+    grainWidthSlider.setTextValueSuffix ("x");
+    grainWidthSlider.setValue ((double) processorRef.getGrainWidthMultiplier(), juce::dontSendNotification);
+    grainWidthSlider.onValueChange = [this] { processorRef.setGrainWidthMultiplier ((float) grainWidthSlider.getValue()); };
+    addAndMakeVisible (grainWidthLabel);
+    addAndMakeVisible (grainWidthSlider);
 
     // Cyan for "detected" (matches the detect-stage meter below) and
     // green for "corrected" (matches the shift-stage meter, and reads as
@@ -181,15 +195,16 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     addAndMakeVisible (shiftValueLabel);
     addAndMakeVisible (totalValueLabel);
 
-    // Height computed from resized()'s layout sum: 566px of stacked
-    // content (tonic/mode/engine rows, the two retune-control sliders,
-    // the pitch displays, the cents meter, bypass, the divider, and the
-    // three performance meters) plus the 16px top/bottom margins from
-    // getLocalBounds().reduced(16) — kept in sync with resized() by hand
-    // since JUCE has no layout-measurement API to derive this from.
-    setSize (320, 598);
+    // Height computed from resized()'s layout sum: 602px of stacked
+    // content (tonic/mode/engine rows, the three creative-control
+    // sliders, the pitch displays, the cents meter, bypass, the divider,
+    // and the three performance meters) plus the 16px top/bottom margins
+    // from getLocalBounds().reduced(16) — kept in sync with resized() by
+    // hand since JUCE has no layout-measurement API to derive this from.
+    setSize (320, 634);
 
     updateRetuneControlsEnablement();
+    updateGrainWidthControlEnablement();
 
     // 10Hz: fast enough to read as "live" for a demo, slow enough not to
     // burden the message thread — this is a UI poll, not audio-path code,
@@ -207,6 +222,7 @@ PitchzazzAudioProcessorEditor::~PitchzazzAudioProcessorEditor()
 void PitchzazzAudioProcessorEditor::timerCallback()
 {
     updateRetuneControlsEnablement();
+    updateGrainWidthControlEnablement();
 
     // EMA smoothing — see the class doc for why this over a windowed
     // average. Applied before anything derived from these values (labels
@@ -305,6 +321,11 @@ void PitchzazzAudioProcessorEditor::updateRetuneControlsEnablement()
     retuneSpeedSlider.setEnabled (enabled);
 }
 
+void PitchzazzAudioProcessorEditor::updateGrainWidthControlEnablement()
+{
+    grainWidthSlider.setEnabled (processorRef.activeEngineSupportsGrainWidthControl());
+}
+
 void PitchzazzAudioProcessorEditor::updateProcessorScale()
 {
     const int tonicPitchClass = tonicBox.getSelectedId() - 1;
@@ -366,6 +387,12 @@ void PitchzazzAudioProcessorEditor::resized()
     auto retuneSpeedRow = area.removeFromTop (28);
     retuneSpeedLabel.setBounds (retuneSpeedRow.removeFromLeft (60));
     retuneSpeedSlider.setBounds (retuneSpeedRow);
+
+    area.removeFromTop (8);
+
+    auto grainWidthRow = area.removeFromTop (28);
+    grainWidthLabel.setBounds (grainWidthRow.removeFromLeft (60));
+    grainWidthSlider.setBounds (grainWidthRow);
 
     area.removeFromTop (16);
     auto pitchDisplayRow = area.removeFromTop (54);

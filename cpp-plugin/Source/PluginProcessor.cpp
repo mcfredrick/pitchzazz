@@ -249,6 +249,18 @@ bool PitchzazzAudioProcessor::activeEngineSupportsRetuneControls() const noexcep
     return worker != nullptr && worker->getActiveSupportsRetuneControls();
 }
 
+void PitchzazzAudioProcessor::setGrainWidthMultiplier (float multiplier) noexcept
+{
+    currentGrainWidthMultiplier = juce::jlimit (pitchzazz::grainWidthMultiplierMin, pitchzazz::grainWidthMultiplierMax, multiplier);
+    if (worker != nullptr)
+        worker->setGrainWidthMultiplier (currentGrainWidthMultiplier);
+}
+
+bool PitchzazzAudioProcessor::activeEngineSupportsGrainWidthControl() const noexcept
+{
+    return worker != nullptr && worker->getActiveSupportsGrainWidthControl();
+}
+
 void PitchzazzAudioProcessor::setEngine (const std::string& engineId)
 {
     currentEngineId = engineId;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DSP/CorrectorWorker.h"
+#include "DSP/PSOLAPitchShifter.h" // grainWidthMultiplierMin/Max, for the getter's/UI's range
 #include "DSP/PitchEngineRegistry.h"
 #include "DSP/RetuneSmoothing.h"
 #include "DSP/Scale.h"
@@ -63,6 +64,14 @@ public:
     /// true) before prepareToPlay has run, same "no worker yet" default
     /// every other active-engine getter here uses.
     bool activeEngineSupportsRetuneControls() const noexcept;
+
+    /// PSOLA-only "grain width" creative control (docs/ROADMAP.md Phase 5,
+    /// item 2) — same forwarding/clamping/getter shape as the two above,
+    /// gated on its own (narrower — PSOLA only, not also the native
+    /// phase-vocoder engine) capability flag.
+    void setGrainWidthMultiplier (float multiplier) noexcept;
+    float getGrainWidthMultiplier() const noexcept { return currentGrainWidthMultiplier; }
+    bool activeEngineSupportsGrainWidthControl() const noexcept;
 
     /// Hot-swaps the active pitch-correction engine (docs/ROADMAP.md
     /// Phase 3) — `engineId` must be one of pitchzazz::availableEngines()'
@@ -143,6 +152,7 @@ private:
     std::string currentEngineId;
     float currentCorrectionAmount = pitchzazz::correctionAmountMax;
     float currentRetuneSpeedMs = pitchzazz::retuneSpeedMsMin;
+    float currentGrainWidthMultiplier = 1.0f; // PSOLAPitchShifter's own default — see its doc
 
     // juce::Thread asserts (UB) if destroyed while still running. Hosts
     // aren't guaranteed to call releaseResources() before destroying the

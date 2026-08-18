@@ -51,6 +51,21 @@
     PitchEngine.h) so the UI is honest about why they stopped doing
     anything rather than pretending they still apply.
 
+    Grain width control (added 2026-08-17): a 0.5x-1.5x multiplier on
+    PSOLA's grain half-width (docs/ROADMAP.md Phase 5, item 2 of the
+    creative-parameter-exposure list) — PSOLA-only, unlike the two
+    controls above, since it's a property of that specific algorithm
+    (grain-based synthesis) with no equivalent in the phase vocoder or the
+    Rust engine. Disabled on both of those, same "disabled not hidden"
+    honesty pattern, just a narrower condition (only PSOLA enables it,
+    where the two controls above are disabled only on Rust). The upper
+    bound is capped at 1.5x rather than something more dramatic
+    specifically to keep this engine's worst-case reported latency below
+    the phase vocoder's — see grainWidthMultiplierMax's doc
+    (PSOLAPitchShifter.h) for the numbers; a wider range would silently
+    have defeated the latency advantage that's this engine's whole reason
+    for existing.
+
     Tuner-style cents meter (added 2026-08-17, widened to the full row
     2026-08-17): a thin gauge spanning the full width under both the
     DETECTED and CORRECTED displays, showing
@@ -98,6 +113,11 @@ private:
     juce::Slider correctionAmountSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::Label retuneSpeedLabel { {}, "Smooth" };
     juce::Slider retuneSpeedSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+
+    // PSOLA-only grain-width control — see the class doc for why its
+    // enablement condition is narrower than the two above.
+    juce::Label grainWidthLabel { {}, "Width" };
+    juce::Slider grainWidthSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
 
     pitchzazz::LCDDisplay detectedPitchDisplay;
     pitchzazz::LCDDisplay correctedPitchDisplay;
@@ -157,6 +177,14 @@ private:
     // in this plugin currently does that — cheap enough to be safe here
     // rather than relying on that always being true).
     void updateRetuneControlsEnablement();
+
+    /// Same shape as updateRetuneControlsEnablement() above, kept as its
+    /// own function rather than folded together: the two check different
+    /// capability flags (a PSOLA-only property vs. a phase-vocoder+PSOLA
+    /// one), and keeping them separate means a future engine with its own
+    /// unique creative controls follows the same one-flag/one-function
+    /// pattern rather than growing one function's branching logic further.
+    void updateGrainWidthControlEnablement();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PitchzazzAudioProcessorEditor)
 };

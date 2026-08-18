@@ -1,9 +1,51 @@
 #pragma once
 
+#include <algorithm>
 #include <vector>
 
 namespace pitchzazz
 {
+
+// Bounds for the "grain width" creative control (docs/ROADMAP.md Phase 5's
+// "Per-algorithm creative parameter exposure" item 2) — a multiplier on the
+// grain half-width placeGrainAt() uses, which is normally locked to exactly
+// one period. That fixed width is the actual mechanism by which PSOLA
+// preserves formants while changing pitch (see placeGrainAt()'s doc: grain
+// *spacing* sets perceived pitch, grain *width* sets the spectral
+// envelope, and decoupling those is the whole point of the algorithm) — so
+// widening or narrowing this moves deliberately away from that
+// formant-preservation property in exchange for a different, more
+// "granular"/textured character, the same kind of trade-off a granular
+// synth's grain-size knob makes.
+//
+// The upper bound is NOT a free musical choice, unlike most of this
+// codebase's other creative-control ranges — it directly sets
+// getLatencySamples()'s fixed worst-case value (see that method's doc:
+// latencySamples = 2 * ceil(maxPeriodSamples * grainWidthMultiplierMax),
+// sized once at construction to safely cover every value this control
+// could ever be set to, not just whatever it happens to be set to right
+// now). A first pass at 3.0x was caught by
+// tests/DSP/PSOLAPitchShifterTests.cpp's latency-formula test: it pushes
+// worst-case latency to ~75ms at 44.1/48kHz — *worse* than the phase
+// vocoder's ~42.7-46.4ms (docs/PERFORMANCE_LOG.md), which would silently
+// defeat this entire engine's reason for existing (the latency win over
+// the phase vocoder, docs/ROADMAP.md's original framing for building
+// TD-PSOLA at all) the moment a user so much as sees this control exists,
+// regardless of what they actually set it to. 1.5x keeps worst-case
+// latency at ~37.5ms — still a real, meaningful reduction versus the
+// phase vocoder (consistent with the ~19%/~12% net reduction this
+// project already accepted as legitimate after the crossfade fix cost
+// latency back, docs/PERFORMANCE_LOG.md's "tighter floor" entry) — a
+// deliberately narrower creative range than a first instinct might pick,
+// chosen specifically to protect that latency budget rather than to
+// maximize textural range. The lower bound doesn't have this problem
+// (narrowing the grain only ever reduces the worst case), so it's the
+// ordinary "no listening-test tooling exists to validate a precise
+// number" judgment call the rest of this codebase's creative-control
+// ranges already use (overSampling, retuneSpeedMs). 1.0x — today's fixed
+// behaviour — sits inside the resulting [0.5, 1.5] range, not at an edge.
+constexpr float grainWidthMultiplierMin = 0.5f;
+constexpr float grainWidthMultiplierMax = 1.5f;
 
 /// Time-Domain Pitch-Synchronous Overlap-Add (TD-PSOLA) pitch shifter —
 /// the algorithm family real low-latency vocal-effects hardware/plugins
@@ -67,19 +109,38 @@ public:
     void shiftPitch (float detectedHz, float semitoneShift,
                       const std::vector<float>& input, std::vector<float>& output);
 
-    /// A **fixed** delay-line tap (2 pitch periods at `minHz`, see the
-    /// .cpp), not one that adapts to the currently detected pitch — sized
-    /// from the worst case so it's always safely long enough, then used
-    /// unconditionally regardless of what's actually playing. This means
-    /// a higher detected pitch does *not* get a shorter real latency than
-    /// a low one: the underlying per-grain lookahead math is pitch-
+    /// Grain half-width multiplier (docs/ROADMAP.md Phase 5) — clamped
+    /// here (not just at the UI layer) so this class's own invariants hold
+    /// regardless of caller discipline, same "validate at the boundary you
+    /// own" convention Corrector::setCorrectionAmount uses. Takes effect on
+    /// the *next* shiftPitch() call, same as the period estimate itself —
+    /// there's no separate "pending" mechanism needed inside this class,
+    /// since nothing here runs concurrently with it (CorrectorWorker calls
+    /// setters and shiftPitch() from the same worker-thread call sequence).
+    void setGrainWidthMultiplier (float multiplier) noexcept
+    {
+        grainWidthMultiplier = std::clamp (multiplier, grainWidthMultiplierMin, grainWidthMultiplierMax);
+    }
+
+    /// A **fixed** delay-line tap — 2x the worst-case grain half-width,
+    /// i.e. 2 * ceil(sampleRate/minHz * grainWidthMultiplierMax) — not one
+    /// that adapts to the currently detected pitch *or* the currently set
+    /// grain-width multiplier: sized from the worst case of both so it's
+    /// always safely long enough, then used unconditionally regardless of
+    /// what's actually playing or set. This means a higher detected pitch
+    /// or a narrower grain does *not* get a shorter real latency: the
+    /// underlying per-grain lookahead math is pitch- and grain-width-
     /// dependent, but the reported/actual output delay isn't, since a
     /// single fixed number is what JUCE's setLatencySamples() needs and a
-    /// host can't be told "it varies." Confirmed exact — not just an
-    /// upper bound — by benchmarks/PSOLALatencyProbe.cpp's onset probe at
-    /// several sample-rate/frequency combinations. Still meaningfully —
-    /// just not dramatically — lower than the phase vocoder's fixed
-    /// ~46-50ms window (docs/PERFORMANCE_LOG.md).
+    /// host can't be told "it varies." grainWidthMultiplierMax was chosen
+    /// specifically to keep this worst case below the phase vocoder's
+    /// fixed ~46-50ms window (docs/PERFORMANCE_LOG.md) — see that
+    /// constant's own doc for the numbers and why 1.5x, not something
+    /// wider, was the right call. Pre-existing (grain-width-control) exact
+    /// confirmation via benchmarks/PSOLALatencyProbe.cpp's onset probe
+    /// predates this control and needs re-running against the new
+    /// worst-case formula — flagged, not yet done (see docs/ROADMAP.md's
+    /// dated entry for this feature).
     [[nodiscard]] int getLatencySamples() const noexcept { return latencySamples; }
 
 private:
@@ -103,6 +164,21 @@ private:
     static constexpr float maxHz = 1000.0f;
 
     int maxPeriodSamples = 0; // sampleRate / minHz, rounded up
+
+    // Worst-case grain half-width across both axes that affect it: the
+    // lowest detectable pitch (maxPeriodSamples) *and* the widest the
+    // grain-width multiplier can ever push it (grainWidthMultiplierMax).
+    // Everything below that has to size for "the biggest grain this class
+    // could ever place" (buffer sizes, latencySamples, the clamp in
+    // shiftPitch()'s per-call halfWidth) uses this instead of
+    // maxPeriodSamples directly, so raising the multiplier can never
+    // exceed what was actually allocated for.
+    int maxHalfWidthSamples = 0;
+
+    // Grain half-width multiplier — see setGrainWidthMultiplier()'s doc.
+    // 1.0 reproduces this class's original fixed-at-one-period behaviour
+    // exactly, so it's the default rather than an edge of the range.
+    float grainWidthMultiplier = 1.0f;
 
     // Circular history of recent input — needs to hold at least
     // 2*maxPeriodSamples (the widest possible grain) plus headroom for
@@ -128,7 +204,15 @@ private:
     double nextMarkPos = 0.0; // absolute sample position of the next synthesis mark
     double periodSamples;     // current smoothed period estimate, in samples
 
-    std::vector<float> grainWindow; // recomputed once per shiftPitch() call, see updatePeriodEstimate()
+    // Recomputed once per shiftPitch() call (see updatePeriodEstimate()),
+    // sized to 2*halfWidth+1 for that call's actual halfWidth. Capacity is
+    // reserved once in the constructor to the worst case (2*maxHalfWidth-
+    // Samples+1) specifically so a grainWidthMultiplier change at runtime
+    // — which can make halfWidth bigger than pitch alone ever demanded,
+    // even after this vector has already "warmed up" at the 1.0x default —
+    // can never trigger a reallocation on this class's non-real-time-but-
+    // still-shouldn't-be-surprising worker thread.
+    std::vector<float> grainWindow;
 
     int latencySamples = 0;
 
