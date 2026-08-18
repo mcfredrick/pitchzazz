@@ -489,6 +489,28 @@ silent permission denial (no crash, no error, no samples). See
   reduce warble on sustained notes near a scale boundary).
 - Scale-selection UI: live key/mode switching from the GUI, not just a CLI
   flag at startup.
+- **Live detected/corrected pitch display, done 2026-08-17:** two
+  LCD-style readouts (`pitchzazz::LCDDisplay`, `MeterComponents.h`) show
+  the detected pitch and the pitch it's being corrected to, each as note
+  name + Hz. Corrected Hz is derived in the editor
+  (`detectedHz * 2^(semitoneShift/12)`) rather than computed separately
+  on the DSP side — `CorrectionResult` already carries both inputs to
+  that formula. Deliberately not EMA-smoothed like the timing meters:
+  smoothing a pitch reading would visually fabricate a glide between
+  notes that never happened in the actual audio. New `CorrectorWorker`/
+  `PluginProcessor` getters (`getLastDetectedHz`/`getLastSemitoneShift`)
+  mirror the existing timing-getter pattern exactly.
+- **Additional musical modes, raised 2026-08-17, not started:** `Scale`
+  already generalizes to any diatonic mode as a fixed interval pattern
+  rotated by the tonic (not a lookup table) — `ScaleMode`'s own doc
+  comment is explicit that Ionian/Aeolian are the only two ported
+  "because that's all this project needs," a scope choice, not a
+  technical limit. Adding the other five church modes (Dorian, Phrygian,
+  Lydian, Mixolydian, Locrian) would be interval-pattern data, not a
+  structural change — genuinely cheap if prioritized. Tradeoff is
+  musical/UX (more dropdown options) rather than engineering risk, and
+  it's a creative-tool feature, not JD-critical per this file's own
+  prioritization criteria — queued, not scoped.
 - **MIDI-controlled pitch target ("vocoder mode"), added 2026-08-17:**
   instead of (or in addition to) snapping to the nearest note in a fixed
   scale, let an incoming MIDI note set the target pitch directly —

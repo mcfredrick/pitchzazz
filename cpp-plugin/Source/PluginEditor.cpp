@@ -1,11 +1,28 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <cmath>
 
 namespace
 {
     // Index 0 = C, matching pitchzazz::Scale::tonicPitchClass's convention.
     const char* const pitchClassNames[12] = { "C", "C#", "D", "D#", "E", "F",
                                                "F#", "G", "G#", "A", "A#", "B" };
+
+    // "A3  220.5Hz", or "--" for hz <= 0 (unvoiced/silent/not yet
+    // available) — shared formatting for both LCD readouts so "detected"
+    // and "corrected" always read the same way.
+    juce::String noteNameAndHz (float hz)
+    {
+        if (hz <= 0.0f)
+            return "--";
+
+        const int roundedMidi = (int) std::lround (pitchzazz::hzToMidi (hz));
+        const int pitchClass = ((roundedMidi % 12) + 12) % 12; // MIDI can't go negative here, but robust regardless
+        const int octave = roundedMidi / 12 - 1;                // MIDI 60 = C4, the standard convention
+
+        return juce::String (pitchClassNames[pitchClass]) + juce::String (octave)
+             + "  " + juce::String (hz, 1) + "Hz";
+    }
 }
 
 //==============================================================================
@@ -55,6 +72,18 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     addAndMakeVisible (engineLabel);
     addAndMakeVisible (engineBox);
 
+    // Cyan for "detected" (matches the detect-stage meter below) and
+    // green for "corrected" (matches the shift-stage meter, and reads as
+    // the "final/settled" value) — same shared-palette convention as
+    // everything else in this editor.
+    detectedPitchDisplay.setCaption ("DETECTED");
+    detectedPitchDisplay.setAccentColour (juce::Colour (pitchzazz::colours::accentCyan));
+    addAndMakeVisible (detectedPitchDisplay);
+
+    correctedPitchDisplay.setCaption ("CORRECTED");
+    correctedPitchDisplay.setAccentColour (juce::Colour (pitchzazz::colours::accentGreen));
+    addAndMakeVisible (correctedPitchDisplay);
+
     bypassButton.setToggleState (processorRef.isBypassed(), juce::dontSendNotification);
     bypassButton.onClick = [this] { processorRef.setBypassed (bypassButton.getToggleState()); };
     addAndMakeVisible (bypassButton);
@@ -95,7 +124,7 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     addAndMakeVisible (shiftValueLabel);
     addAndMakeVisible (totalValueLabel);
 
-    setSize (320, 500);
+    setSize (320, 570);
 
     // 10Hz: fast enough to read as "live" for a demo, slow enough not to
     // burden the message thread — this is a UI poll, not audio-path code,
@@ -167,6 +196,19 @@ void PitchzazzAudioProcessorEditor::timerCallback()
     const float smoothedTotalUs = smoothedDetectUs + smoothedQuantizeUs + smoothedShiftUs;
     totalValueLabel.setText ("Total: " + juce::String (smoothedTotalUs, 0) + "us / " + juce::String (budgetUs, 0) + "us budget",
                               juce::dontSendNotification);
+
+    // Deliberately not EMA-smoothed like the numbers above: this is a
+    // live musical reading, not a noisy per-block cost measurement, and
+    // smoothing it would visually manufacture a fake glide/portamento
+    // between notes (and into/out of silence) that never actually
+    // happened in the audio. Shown as-is, block to block.
+    const float detectedHz = processorRef.getLastDetectedHz();
+    detectedPitchDisplay.setValueText (noteNameAndHz (detectedHz));
+
+    const float correctedHz = detectedHz > 0.0f
+        ? detectedHz * std::pow (2.0f, processorRef.getLastSemitoneShift() / 12.0f)
+        : 0.0f;
+    correctedPitchDisplay.setValueText (noteNameAndHz (correctedHz));
 }
 
 void PitchzazzAudioProcessorEditor::updateProcessorScale()
@@ -217,6 +259,12 @@ void PitchzazzAudioProcessorEditor::resized()
     auto engineRow = area.removeFromTop (28);
     engineLabel.setBounds (engineRow.removeFromLeft (60));
     engineBox.setBounds (engineRow);
+
+    area.removeFromTop (16);
+    auto pitchDisplayRow = area.removeFromTop (54);
+    detectedPitchDisplay.setBounds (pitchDisplayRow.removeFromLeft (pitchDisplayRow.getWidth() / 2 - 4));
+    pitchDisplayRow.removeFromLeft (8);
+    correctedPitchDisplay.setBounds (pitchDisplayRow);
 
     area.removeFromTop (16);
     bypassButton.setBounds (area.removeFromTop (28));

@@ -59,4 +59,66 @@ private:
     juce::Colour fillColour = juce::Colours::lightblue;
 };
 
+/// An "LCD"-style readout: a small caption over a large monospace value,
+/// on a dark recessed panel with a neon-accent border — reuses the same
+/// dark+neon palette PitchzazzLookAndFeel.h already establishes rather
+/// than inventing a separate look for just this one component. For the
+/// GUI's live detected/corrected pitch display (docs/ROADMAP.md Phase 5).
+class LCDDisplay : public juce::Component
+{
+public:
+    void setCaption (const juce::String& newCaption)
+    {
+        if (caption != newCaption)
+        {
+            caption = newCaption;
+            repaint();
+        }
+    }
+
+    void setValueText (const juce::String& newValue)
+    {
+        if (value != newValue)
+        {
+            value = newValue;
+            repaint();
+        }
+    }
+
+    void setAccentColour (juce::Colour newColour) noexcept
+    {
+        accentColour = newColour;
+        repaint();
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto bounds = getLocalBounds().toFloat();
+        const float cornerSize = 6.0f;
+
+        // Darker than the surrounding panel background (colours::panel,
+        // 0x1b1e27) so this reads as recessed "glass" rather than a flat
+        // label sitting on the same surface as everything else.
+        g.setColour (juce::Colour (0xff0a0b10));
+        g.fillRoundedRectangle (bounds, cornerSize);
+        g.setColour (accentColour.withAlpha (0.5f));
+        g.drawRoundedRectangle (bounds.reduced (0.5f), cornerSize, 1.2f);
+
+        auto area = bounds.reduced (10.0f, 4.0f);
+
+        g.setColour (accentColour.withAlpha (0.75f));
+        g.setFont (juce::Font (11.0f, juce::Font::bold));
+        g.drawText (caption, area.removeFromTop (16.0f), juce::Justification::centredLeft);
+
+        g.setColour (accentColour);
+        g.setFont (juce::Font (juce::Font::getDefaultMonospacedFontName(), 23.0f, juce::Font::bold));
+        g.drawText (value, area, juce::Justification::centredLeft);
+    }
+
+private:
+    juce::String caption;
+    juce::String value { "--" };
+    juce::Colour accentColour = juce::Colours::lightblue;
+};
+
 } // namespace pitchzazz

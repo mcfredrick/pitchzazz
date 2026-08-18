@@ -74,6 +74,16 @@ double CorrectorWorker::getLastShiftUs() const noexcept
     return lastShiftUs.load (std::memory_order_relaxed);
 }
 
+float CorrectorWorker::getLastDetectedHz() const noexcept
+{
+    return lastDetectedHz.load (std::memory_order_relaxed);
+}
+
+float CorrectorWorker::getLastSemitoneShift() const noexcept
+{
+    return lastSemitoneShift.load (std::memory_order_relaxed);
+}
+
 namespace
 {
     void pushToOutputFifo (const std::vector<float>& samples, juce::AbstractFifo& outputFifo, std::vector<float>& outputBuffer)
@@ -185,6 +195,8 @@ void CorrectorWorker::run()
             lastDetectUs.store (blended.timings.detectUs, std::memory_order_relaxed);
             lastQuantizeUs.store (blended.timings.quantizeUs, std::memory_order_relaxed);
             lastShiftUs.store (blended.timings.shiftUs, std::memory_order_relaxed);
+            lastDetectedHz.store (blended.detectedHz, std::memory_order_relaxed);
+            lastSemitoneShift.store (blended.semitoneShift, std::memory_order_relaxed);
 
             pushToOutputFifo (blended.samples, outputFifo, outputBuffer);
 
@@ -203,6 +215,8 @@ void CorrectorWorker::run()
             lastDetectUs.store (result.timings.detectUs, std::memory_order_relaxed);
             lastQuantizeUs.store (result.timings.quantizeUs, std::memory_order_relaxed);
             lastShiftUs.store (result.timings.shiftUs, std::memory_order_relaxed);
+            lastDetectedHz.store (result.detectedHz, std::memory_order_relaxed);
+            lastSemitoneShift.store (result.semitoneShift, std::memory_order_relaxed);
             pushToOutputFifo (result.samples, outputFifo, outputBuffer);
         }
 

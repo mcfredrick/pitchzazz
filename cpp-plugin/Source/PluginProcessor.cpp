@@ -273,6 +273,9 @@ double PitchzazzAudioProcessor::getLastDetectUs() const { return worker != nullp
 double PitchzazzAudioProcessor::getLastQuantizeUs() const { return worker != nullptr ? worker->getLastQuantizeUs() : 0.0; }
 double PitchzazzAudioProcessor::getLastShiftUs() const { return worker != nullptr ? worker->getLastShiftUs() : 0.0; }
 
+float PitchzazzAudioProcessor::getLastDetectedHz() const { return worker != nullptr ? worker->getLastDetectedHz() : 0.0f; }
+float PitchzazzAudioProcessor::getLastSemitoneShift() const { return worker != nullptr ? worker->getLastSemitoneShift() : 0.0f; }
+
 double PitchzazzAudioProcessor::getBudgetUs() const
 {
     const double sr = getSampleRate();

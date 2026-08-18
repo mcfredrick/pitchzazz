@@ -33,6 +33,15 @@
     colours (`PitchzazzLookAndFeel.h`), replacing JUCE's default grey
     look and feel — a styling pass only, no layout/behavior changes,
     scoped per docs/ROADMAP.md Phase 5's reskin item.
+
+    Live pitch display (added 2026-08-17): two LCD-style readouts
+    (`pitchzazz::LCDDisplay`) showing the detected pitch and the
+    corrected/quantized pitch it's being snapped to, each as a note name
+    plus Hz. The corrected value isn't a separately-tracked quantity —
+    it's derived here from `getLastDetectedHz()`/`getLastSemitoneShift()`
+    (`detectedHz * 2^(semitoneShift/12)`), the same relationship
+    `Corrector::process()` itself uses, rather than duplicating that math
+    on the DSP side for a display-only value.
 */
 class PitchzazzAudioProcessorEditor : public juce::AudioProcessorEditor,
                                        private juce::Timer
@@ -55,6 +64,9 @@ private:
     juce::ToggleButton bypassButton { "Bypass" };
     juce::Label engineLabel { {}, "Engine" };
     juce::ComboBox engineBox;
+
+    pitchzazz::LCDDisplay detectedPitchDisplay;
+    pitchzazz::LCDDisplay correctedPitchDisplay;
 
     juce::Label performanceHeaderLabel { {}, "PERFORMANCE" };
     juce::Label latencyValueLabel { {}, "-" };

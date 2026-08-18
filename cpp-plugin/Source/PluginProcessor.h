@@ -68,6 +68,13 @@ public:
     double getLastQuantizeUs() const;
     double getLastShiftUs() const;
 
+    /// Most recent detected pitch (0 if unvoiced/silent) and the
+    /// semitone shift applied to correct it, for the GUI's live pitch
+    /// display — same all-0-before-prepareToPlay and eventual-consistency
+    /// contract as the getters above.
+    float getLastDetectedHz() const;
+    float getLastSemitoneShift() const;
+
     /// The real-time processing budget for one block, in microseconds —
     /// for the GUI's segmented processing-time meter, so it can show
     /// stage cost relative to the budget, not just relative to itself.

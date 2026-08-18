@@ -99,6 +99,15 @@ public:
     double getLastQuantizeUs() const noexcept;
     double getLastShiftUs() const noexcept;
 
+    /// Most recent detected pitch in Hz (0 if the block was unvoiced/
+    /// silent) and the semitone shift applied to correct it — for the
+    /// GUI's live pitch display. Same purely-informational, eventual-
+    /// consistency contract as the timing getters above. The *corrected*
+    /// Hz isn't stored separately: it's `detectedHz * 2^(semitoneShift/12)`,
+    /// cheap enough to derive in the GUI rather than duplicate here.
+    float getLastDetectedHz() const noexcept;
+    float getLastSemitoneShift() const noexcept;
+
 private:
     // 4 blocks (~185ms at 44.1kHz/2048) rather than 1 — a single-block
     // linear blend measurably reduced the swap-boundary discontinuity
@@ -136,6 +145,8 @@ private:
     std::atomic<double> lastDetectUs { 0.0 };
     std::atomic<double> lastQuantizeUs { 0.0 };
     std::atomic<double> lastShiftUs { 0.0 };
+    std::atomic<float> lastDetectedHz { 0.0f };
+    std::atomic<float> lastSemitoneShift { 0.0f };
 };
 
 } // namespace pitchzazz
