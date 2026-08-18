@@ -15,33 +15,34 @@ Weigh new work against that section before adding it to a phase.
 
 ## Current status (last updated 2026-08-17)
 
-- Workspace builds clean, `cargo test` (6/6 pass) and `cargo clippy` are
-  clean, on a native `aarch64-apple-darwin` toolchain.
-- Runs live end-to-end against a real mic: pitch detection, scale
-  quantization, and pitch shifting are functionally correct.
-- Worker-thread processing time: was structurally slower than real-time
-  (40-60% over budget) at default settings; root-caused to the pitch
-  shifter's oversampling factor (32, unmeasured leftover from the original
-  prototype) and dropped to 8, which brought most blocks comfortably under
-  budget. Two outlier spikes in the same test run are not yet explained
-  (probably OS scheduling jitter, not confirmed). Full trail in
-  `docs/PERFORMANCE_LOG.md` — read it before changing anything
-  performance-related, the reasoning matters as much as the current state.
-- **Separately, and not yet measured directly**: total mic-to-speaker
-  pipeline latency (which includes the phase vocoder's ~50ms window, not
-  just the worker thread's CPU time) is analytically estimated at roughly
-  70-100ms+ — see `docs/PERFORMANCE_LOG.md`'s SOTA comparison entry. That
-  puts this project in line with general-purpose (non-live-optimized)
-  commercial pitch-correction plugins, not the specialized sub-10ms live
-  tier, which uses a fundamentally different algorithm family
-  (time-domain PSOLA vs. this project's phase vocoder). Per project
-  direction: don't chase past what real competitors achieve on this
-  timeline — measure honestly, explain where the latency comes from, and
-  note the algorithm-family swap as a Phase 2+ idea, not an MVP blocker.
-- **Immediate next task** (`docs/ROADMAP.md` Phase 1): get an actual
-  measured end-to-end latency number (e.g. an impulse/loopback test) to
-  replace the analytical estimate above, and characterize whether the two
-  outlier timing spikes are one-off jitter or a recurring pattern.
+- Phases 0-3 are done. Rust MVP (Phase 1) has a *measured* (impulse-probe,
+  not analytical-estimate) end-to-end latency number — see
+  `docs/PERFORMANCE_LOG.md`'s "Measured pipeline latency" entry. The
+  C++/JUCE port (Phase 2) is a real loadable AU/VST3/Standalone plugin,
+  confirmed working in Ableton Live 12, not just a passthrough that
+  satisfies `pluginval`/`auval`. Hot-swappable backends — Rust (FFI),
+  native C++ (phase vocoder), and C++ TD-PSOLA (Phase 5) — are validated
+  by an automated dropout-detection test (`docs/TESTING.md`), not just
+  architecture that looks right. Full trail across
+  `docs/PERFORMANCE_LOG.md`, `docs/COMPARISON.md`, and `docs/FINDINGS.md`.
+- Phase 5 polish is in progress. Done so far: the TD-PSOLA engine (a real
+  measured ~19-46% latency win over the phase vocoder depending on rate
+  and revision — see `docs/PERFORMANCE_LOG.md`), the dark/neon visual
+  redesign, the live detected/corrected pitch display, and — added
+  2026-08-17 in one session — the classic Auto-Tune "correction amount" /
+  "retune speed" (labeled "Smooth" in the UI) creative controls on both
+  C++ engines, plus a full-width tuner-style cents-deviation meter under
+  the pitch displays.
+- **Modern C++ best-practices audit (2026-08-17): done.** Two real,
+  multi-instance categories found and fixed (`unique_ptr` ownership,
+  `noexcept`/`[[nodiscard]]` consistency), codified as durable rules in
+  `cpp-plugin/CLAUDE.md`'s "C++ code quality standards" section so they
+  don't regress. No correctness bugs found.
+- **Immediate next task** (`docs/ROADMAP.md`, "Presentation walkthrough
+  tooling"): the guided code-tour (CodeTour-style) through the 7 stops
+  that demonstrate real-time-audio-engineering depth — explicitly gated
+  on the best-practices audit landing first, which it now has. Not yet
+  started.
 
 ## Rules to always follow in this codebase
 
