@@ -750,6 +750,51 @@ silent permission denial (no crash, no error, no samples). See
   crossfade progress, detected-pitch history) for developer show-and-tell
   purposes. Explicitly not a priority right now, per project direction —
   noted so it doesn't get lost, not queued.
+- **Automatic key detection ("Auto-Key"), raised 2026-08-18, not started.**
+  Antares Auto-Key analog: detect the song's musical key automatically —
+  from a dedicated sidechain/sideline track (a rough mix, an instrumental,
+  another DAW track), the way the user specifically framed it, rather than
+  requiring manual tonic/mode selection — and feed the result into the
+  existing `Scale` this project already threads through both engines.
+  Genuinely new DSP, not a parameter tweak: this project's pitch detection
+  (McLeod, monophonic — one dominant pitch per block) is the wrong tool
+  for key detection on a full band mix, which is polyphonic by nature.
+  The standard approach is a chroma/pitch-class-profile histogram (bin
+  spectral energy into 12 pitch classes over a time window) correlated
+  against 24 reference key profiles — the classic Krumhansl-Schmuckler
+  key-finding algorithm and its descendants — picking whichever key
+  profile correlates best. That's a materially different algorithm family
+  from anything in `DSP/` today, closer in kind to the FFT-based phase
+  vocoder than the autocorrelation-based detector, but solving a different
+  problem (key, not per-block pitch).
+  **Two real open design questions, not yet decided:**
+  1. **Sidechain input bus vs. self-detection from the vocal itself.** A
+     dedicated sidechain track (what the user asked for, and what actual
+     Auto-Key uses) needs a second `AudioProcessor` input bus —
+     `isBusesLayoutSupported`/`processBlock` currently assume a single
+     main bus, so this is a real architectural addition, not a config
+     flag. The cheaper alternative — accumulate a chroma histogram from
+     the existing monophonic `detectedHz` stream instead, no new I/O — is
+     easier to build but a noisier signal (a solo vocal may not hit every
+     scale degree in a reasonable capture window, and melodic-only content
+     correlates against key profiles worse than full harmonic/chordal
+     context does). Worth deciding deliberately, not defaulting to
+     whichever is easier to code.
+  2. **One-shot "learn" pass vs. continuously adaptive.** Real Auto-Key
+     products typically analyze a stretch of audio once and lock the
+     result (a "Learn"/"Set Key" action) rather than continuously
+     re-detecting — continuous re-detection risks the same
+     plugin-delay-compensation-unfriendly "value changes live" problem
+     already flagged and rejected for adaptive PSOLA latency
+     (`docs/ROADMAP.md`'s TD-PSOLA entries) and the phase vocoder's
+     dynamic-window-sizing idea above, plus a confidence/lock UI needs
+     designing either way (when has enough audio been analyzed to trust
+     the result?).
+  Per this file's own prioritization criteria: genuinely interesting as a
+  new algorithm class (real signal-processing/MIR work, not just another
+  exposed parameter), but scope and architecture need a real decision
+  before starting, not assumed — queued for a future session, not
+  scoped yet.
 - **Visual redesign, done 2026-08-17**: replaced JUCE's default grey
   look and feel with a dark-background/neon-accent theme
   (`Source/PitchzazzLookAndFeel.h`) — custom `LookAndFeel_V4` colour
