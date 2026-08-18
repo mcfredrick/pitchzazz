@@ -29,16 +29,23 @@ mod ffi {
         type RustCorrector;
 
         /// `tonic_pitch_class`: 0-11, 0 = C — same convention as the
-        /// C++ side's `pitchzazz::Scale::tonicPitchClass`.
+        /// C++ side's `pitchzazz::Scale::tonicPitchClass`. `mode`: 0-6,
+        /// encoding Ionian/Dorian/Phrygian/Lydian/Mixolydian/Aeolian/
+        /// Locrian in that order — same convention as the C++ side's
+        /// `pitchzazz::ScaleMode` enum (see RustCorrectorEngine.cpp's
+        /// `toModeIndex`). An FFI-safe integer rather than a shared enum:
+        /// cxx doesn't support sharing a Rust enum with C++ directly, and
+        /// a matched integer convention on both sides is simpler than a
+        /// second bridge type just for this.
         fn new_corrector(
             block_size: usize,
             sample_rate: usize,
             window_size_ms: usize,
             tonic_pitch_class: u8,
-            is_minor: bool,
+            mode: u8,
         ) -> Box<RustCorrector>;
 
-        fn set_scale(corrector: &mut RustCorrector, tonic_pitch_class: u8, is_minor: bool);
+        fn set_scale(corrector: &mut RustCorrector, tonic_pitch_class: u8, mode: u8);
 
         /// `out.len()` must equal `block_size` passed to `new_corrector`.
         fn process(
@@ -58,14 +65,33 @@ pub struct RustCorrector {
     inner: PitchCorrector,
 }
 
-fn build_scale(tonic_pitch_class: u8, is_minor: bool) -> Scale {
+// Index convention shared with the C++ side's `pitchzazz::ScaleMode` enum
+// (see RustCorrectorEngine.cpp's `toModeIndex`) — 0-6 in
+// Ionian/Dorian/Phrygian/Lydian/Mixolydian/Aeolian/Locrian order. An
+// out-of-range value (which shouldn't happen — the C++ side only ever
+// sends a valid ScaleMode) falls back to Ionian rather than panicking
+// across the FFI boundary, matching this crate's general fail-safe
+// philosophy for this seam (see `process`'s catch_unwind above).
+fn mode_from_index(index: u8) -> Mode {
+    match index {
+        0 => Mode::Ionian,
+        1 => Mode::Dorian,
+        2 => Mode::Phrygian,
+        3 => Mode::Lydian,
+        4 => Mode::Mixolydian,
+        5 => Mode::Aeolian,
+        6 => Mode::Locrian,
+        _ => Mode::Ionian,
+    }
+}
+
+fn build_scale(tonic_pitch_class: u8, mode: u8) -> Scale {
     let pitch_class = PitchClass::from_u8(tonic_pitch_class);
-    let mode = if is_minor { Mode::Aeolian } else { Mode::Ionian };
     Scale::new(
         ScaleType::Diatonic,
         pitch_class,
         4,
-        Some(mode),
+        Some(mode_from_index(mode)),
         Direction::Ascending,
     )
     .expect("Scale::new with a fixed, valid ScaleType/Mode combination should not fail")
@@ -76,18 +102,16 @@ fn new_corrector(
     sample_rate: usize,
     window_size_ms: usize,
     tonic_pitch_class: u8,
-    is_minor: bool,
+    mode: u8,
 ) -> Box<RustCorrector> {
-    let scale = build_scale(tonic_pitch_class, is_minor);
+    let scale = build_scale(tonic_pitch_class, mode);
     Box::new(RustCorrector {
         inner: PitchCorrector::new(block_size, sample_rate, window_size_ms, scale),
     })
 }
 
-fn set_scale(corrector: &mut RustCorrector, tonic_pitch_class: u8, is_minor: bool) {
-    corrector
-        .inner
-        .set_scale(build_scale(tonic_pitch_class, is_minor));
+fn set_scale(corrector: &mut RustCorrector, tonic_pitch_class: u8, mode: u8) {
+    corrector.inner.set_scale(build_scale(tonic_pitch_class, mode));
 }
 
 fn latency_samples(corrector: &RustCorrector) -> usize {

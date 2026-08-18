@@ -68,7 +68,9 @@ struct Args {
     #[arg(long, default_value = "C")]
     tonic: String,
 
-    /// "major" or "minor". Anything else falls back to major with a warning.
+    /// One of "major"/"ionian", "minor"/"aeolian", "dorian", "phrygian",
+    /// "lydian", "mixolydian", "locrian". Anything else falls back to
+    /// major with a warning.
     #[arg(long, default_value = "major")]
     mode: String,
 
@@ -94,8 +96,13 @@ fn parse_scale(tonic: &str, mode: &str) -> Scale {
         PitchClass::C
     });
     let scale_mode = match mode.to_lowercase().as_str() {
-        "minor" => Mode::Aeolian,
-        "major" => Mode::Ionian,
+        "major" | "ionian" => Mode::Ionian,
+        "minor" | "aeolian" => Mode::Aeolian,
+        "dorian" => Mode::Dorian,
+        "phrygian" => Mode::Phrygian,
+        "lydian" => Mode::Lydian,
+        "mixolydian" => Mode::Mixolydian,
+        "locrian" => Mode::Locrian,
         other => {
             eprintln!("warning: unrecognized mode '{other}', defaulting to major");
             Mode::Ionian
@@ -122,14 +129,14 @@ fn err_fn(err: cpal::StreamError) {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let scale = parse_scale(&args.tonic, &args.mode);
+    // Print the mode `parse_scale` actually resolved to (via `Mode`'s own
+    // `Display` impl), not a re-derivation from the raw `--mode` string —
+    // the two could disagree (e.g. an unrecognized value falls back to
+    // major with a warning) and this line should reflect ground truth.
     println!(
         "pitchzazz: correcting into {} {}",
         args.tonic,
-        if args.mode.to_lowercase() == "minor" {
-            "minor"
-        } else {
-            "major"
-        }
+        scale.mode.expect("parse_scale always constructs a Scale with Some(mode)")
     );
 
     let host = cpal::default_host();

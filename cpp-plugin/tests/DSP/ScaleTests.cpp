@@ -6,6 +6,7 @@ using namespace pitchzazz;
 namespace
 {
     Scale cMajor() { return { 0, ScaleMode::major }; } // C = pitch class 0
+    Scale cDorian() { return { 0, ScaleMode::dorian }; }
 
     int pitchClassOf (int midiNote) { return ((midiNote % 12) + 12) % 12; }
 }
@@ -36,6 +37,17 @@ TEST_CASE ("result is always in scale", "[scale]")
         const int snapped = nearestInScaleMidi (midi, scale);
         CHECK (scale.containsPitchClass (pitchClassOf (snapped)));
     }
+}
+
+TEST_CASE ("Dorian mode snaps to a different note than Ionian at the same tonic", "[scale]")
+{
+    // C Dorian is {C,D,Eb,F,G,A,Bb} vs. C major's {C,D,E,F,G,A,B} — differs
+    // at the 3rd and 7th degrees, so this exercises intervalsFor()'s mode
+    // dispatch rather than re-testing "does containsPitchClass work at
+    // all." Mirrors pitch-core's own Dorian test (scale.rs) exactly.
+    const auto scale = cDorian();
+    CHECK (nearestInScaleMidi (64, scale) != 64); // E4: in C major, not in C Dorian (Eb, not E)
+    CHECK (nearestInScaleMidi (63, scale) == 63); // Eb4: C Dorian's 3rd degree, unchanged
 }
 
 TEST_CASE ("works across octaves, not just the scale's home octave", "[scale]")

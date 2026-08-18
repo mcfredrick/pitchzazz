@@ -90,6 +90,21 @@ mod tests {
         .unwrap()
     }
 
+    // Same tonic (C) as c_major() above, different mode: C Dorian is
+    // {C,D,Eb,F,G,A,Bb} vs. C major's {C,D,E,F,G,A,B} — differs at the
+    // 3rd and 7th degrees, so this actually exercises the mode-rotation
+    // logic rather than just re-testing "does the crate accept a tonic."
+    fn c_dorian() -> Scale {
+        Scale::new(
+            ScaleType::Diatonic,
+            PitchClass::C,
+            4,
+            Some(Mode::Dorian),
+            Direction::Ascending,
+        )
+        .unwrap()
+    }
+
     #[test]
     fn note_already_in_scale_is_unchanged() {
         let scale = c_major();
@@ -118,6 +133,19 @@ mod tests {
                 "snapped note {snapped} (from {midi}) is not in scale"
             );
         }
+    }
+
+    #[test]
+    fn dorian_mode_snaps_to_a_different_note_than_ionian_at_the_same_tonic() {
+        let dorian = c_dorian();
+        // E4 = MIDI 64: in C major (Ionian) but not in C Dorian, whose 3rd
+        // degree is Eb, not E. If mode rotation were silently ignored (the
+        // exact class of bug this project's Phase 0 stalled on for a
+        // different reason — see this file's module doc), this would
+        // wrongly report E as already in-scale instead of snapping it.
+        assert_ne!(nearest_in_scale_midi(64, &dorian), 64);
+        // Eb4 = MIDI 63 is C Dorian's 3rd degree and should be unchanged.
+        assert_eq!(nearest_in_scale_midi(63, &dorian), 63);
     }
 
     #[test]

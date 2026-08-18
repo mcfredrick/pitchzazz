@@ -3,15 +3,23 @@
 namespace pitchzazz
 {
 
-/// Which diatonic mode a Scale uses. Mirrors the two modes pitch-cli
-/// actually exposes via --mode (major/minor) — see parse_scale() in the
-/// Rust crates/pitch-cli/src/main.rs. Not a general music-theory library:
-/// this project only ever needs Ionian/Aeolian, so that's all that's
-/// ported from rust-music-theory's much larger surface.
+/// Which diatonic mode a Scale uses. Mirrors the seven modes pitch-cli
+/// exposes via --mode — see parse_scale() in the Rust
+/// crates/pitch-cli/src/main.rs, which resolves to
+/// rust_music_theory::scale::Mode's Ionian/Dorian/Phrygian/Lydian/
+/// Mixolydian/Aeolian/Locrian variants (all seven modes of the major
+/// scale, i.e. every diatonic rotation — not a general music-theory
+/// library's full surface, which also has non-diatonic scale types like
+/// harmonic/melodic minor that this project doesn't need).
 enum class ScaleMode
 {
     major, // Ionian
-    minor  // Aeolian
+    minor, // Aeolian
+    dorian,
+    phrygian,
+    lydian,
+    mixolydian,
+    locrian
 };
 
 /// A diatonic scale: a tonic pitch class (0 = C .. 11 = B) plus a mode.
