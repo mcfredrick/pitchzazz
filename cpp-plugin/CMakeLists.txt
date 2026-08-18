@@ -362,6 +362,16 @@ juce_add_plugin(${PROJECT_NAME}
     AU_SANDBOX_SAFE TRUE
     VST3_CATEGORIES "Drum|Tools"
     ICON_BIG "${APP_ICON_PATH}"
+    # Without this, JUCE never writes NSMicrophoneUsageDescription into the
+    # Standalone app's Info.plist, and modern macOS silently denies
+    # microphone access to apps missing that key — no crash, no visible
+    # error, the input stream just never delivers samples. Root-caused by
+    # inspecting the built app's actual Info.plist (PlistBuddy), not
+    # assumed from JUCE's docs. AU/VST3 targets don't need this: the host
+    # DAW's own Info.plist/entitlements own microphone permission for
+    # plugins running inside it.
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "Pitchzazz needs microphone access to apply real-time pitch correction to your voice."
 )
 
 juce_generate_juce_header(${PROJECT_NAME})

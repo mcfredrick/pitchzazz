@@ -597,3 +597,55 @@ identifiable defect on its own terms) — real-audio listening
 confirmation from the user is still the open item, not an automated
 test asserting a threshold that was measured not to actually
 discriminate the regression.
+
+---
+
+## 2026-08-17 — TD-PSOLA cross-fade reverted: real listening said it didn't work
+
+That "still open item" resolved fast, and not the way the DSP reasoning
+predicted. Real listening on the rebuilt cross-fade version found the
+crackle/beat artifact **still present, possibly worse** — the fix that
+shipped on sound-sounding theory did not survive contact with actual
+ears. Reverted rather than keep tuning blind.
+
+**Best available diagnosis, not confirmed by measurement** (no way to
+verify this by ear myself): comb filtering. The cross-fade blends two
+waveform segments exactly one period apart, which is only a clean blend
+if the signal is truly periodic at exactly that spacing. Real voice
+isn't — `periodSamples` is a single per-block (~46ms) estimate, but
+actual vocal-fold vibration has natural cycle-to-cycle jitter, so the
+true period drifts slightly out of sync with that fixed estimate over
+the course of a block. Linearly blending two similar-but-phase-shifted
+waveforms doesn't sound like a smooth cross-fade — it produces frequency-
+dependent cancellation, and as the misalignment changes over time the
+cancelled frequencies sweep, which could easily read as a "beat." This
+is a documented failure mode of naive PSOLA grain-averaging without
+alignment, not a novel guess, but it's a hypothesis, not a verified root
+cause — nothing here was measured to confirm it, only reasoned about.
+
+**A high/low-pass filter was raised as a possible fix and rejected on
+the same reasoning basis, not tested:** beating shows up as sidebands
+around the pitch itself (a 220Hz tone beating at 5Hz puts energy at
+215Hz/225Hz, not at a separate 5Hz component), and crackle is a broadband
+transient — neither has a spectral signature a simple threshold filter
+would cleanly separate from the desired signal. Worth adding a standard
+DC-blocking high-pass (~20-30Hz) as general overlap-add hygiene
+regardless, but not expected to address this artifact specifically.
+
+**Decision, offered as an explicit choice and taken:** revert to
+single-bucket (back to `latencySamples = 2 * maxPeriodSamples`, ~25ms —
+see the two entries above for that number's own history), document the
+crackle as a known, accepted limitation of this simplified PSOLA design,
+and stop iterating on it for now. The real fix — correlation-based grain
+alignment before blending, not blending alone — is bigger scope than this
+project's timeline has room for. This engine's demonstrated value is the
+latency comparison against the phase vocoder (docs/ROADMAP.md's original
+framing for building it at all), not production-grade reconstruction
+quality; the artifact is disclosed, not hidden, which is the more
+important property for what this project is actually for.
+
+**Numbers, back to where they were before the cross-fade attempt:** 25.0ms
+at both 44.1kHz and 48kHz (2 periods at `minHz=80`, confirmed exact via
+`benchmarks/PSOLALatencyProbe.cpp`), ~46% less than the phase vocoder's
+46.4ms at 44.1kHz and ~41% less than its 42.7ms at 48kHz — the `minHz`
+tightening's full gain, with none of it given back this time.

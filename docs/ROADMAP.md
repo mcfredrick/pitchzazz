@@ -444,7 +444,7 @@ overshoot — full story in `docs/FINDINGS.md` #18, worth reading for the
 "increasing a safety margin didn't change the size of the gap, and that
 itself was the diagnostic clue" narrative.
 
-**Revisited same day, twice more, both user-directed.** (1) Tightened
+**Revisited same day, three times, all user-directed.** (1) Tightened
 `minHz` 60->80 (still below typical bass vocal range, less headroom) for
 a pure, host-safe latency reduction — a fully *adaptive* (pitch-tracked)
 alternative was raised and explicitly rejected: a DAW host's plugin-delay-
@@ -455,16 +455,34 @@ idea below already flagged for the phase vocoder. (2) Real listening on
 live audio (not the synthetic tones the unit tests use) found a crackle/
 low-frequency-beat artifact; root-caused to `placeGrainAt` snapping to a
 single analysis bucket instead of cross-fading between the two nearest,
-and fixed — at the cost of one more period of lookahead, partially
-offsetting (1)'s gain. Net result after both changes: ~19% less latency
-than the phase vocoder at 44.1kHz, ~12% less at 48kHz — smaller than
-either change alone implied, but real, and the crackle fix isn't
-optional (a faster engine that's audibly broken isn't a real
-alternative). Full accounting, including three automated-test approaches
-tried (and why none of them actually verified the crackle fix — matches
-this project's own finding #14 precedent that a passing metric and real
-perceptual quality aren't always the same bar) in `docs/PERFORMANCE_LOG.md`'s
-follow-up dated entry and `docs/FINDINGS.md` #19.
+and "fixed" — at the cost of one more period of lookahead. (3) Real
+listening on the rebuilt cross-fade version found the artifact **still
+present, possibly worse** — reverted back to single-bucket entirely
+rather than keep tuning without being able to verify by ear.
+**Current, final state:** single-bucket `placeGrainAt`, `latencySamples
+= 2 * maxPeriodSamples`, ~25.0ms at both 44.1kHz and 48kHz — ~46%/~41%
+less than the phase vocoder, the full gain from (1) alone, since (3)
+gave none of it back. The crackle/beat artifact is a documented, accepted
+limitation of this simplified PSOLA design, not something worth chasing
+further within this project's timeline — the real fix (correlation-based
+grain alignment before blending) is bigger scope, and this engine's
+demonstrated value is the latency comparison against the phase vocoder,
+not production-grade reconstruction quality. Full accounting — including
+three automated-test approaches tried for the cross-fade specifically,
+none of which actually verified it (matches this project's own finding
+#14 precedent that a passing metric and real perceptual quality aren't
+always the same bar), the comb-filtering hypothesis for why cross-fading
+didn't help, and why a high/low-pass filter was considered and rejected
+as a fix — in `docs/PERFORMANCE_LOG.md`'s two follow-up dated entries and
+`docs/FINDINGS.md` #19-20.
+
+Separately, the same day: microphone input in the Standalone app, broken
+for the entire session up to this point (blocking any live-mic testing),
+was root-caused and fixed — `CMakeLists.txt`'s `juce_add_plugin()` never
+set `MICROPHONE_PERMISSION_ENABLED`, so the built app's `Info.plist` was
+missing `NSMicrophoneUsageDescription`, which modern macOS treats as
+silent permission denial (no crash, no error, no samples). See
+`docs/FINDINGS.md` #21.
 
 - Note-matching refinement: handle edge cases beyond the current nearest-
   semitone search (e.g. weighting toward the previous detected note to

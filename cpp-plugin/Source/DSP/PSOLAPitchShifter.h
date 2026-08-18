@@ -37,10 +37,19 @@ namespace pitchzazz
 /// reconstruction quality on non-stationary pitch; it does not undermine
 /// the actual point of building this engine, which is the *latency*
 /// comparison against the phase vocoder — see getLatencySamples()'s doc.
-/// A related, separate simplification — reading source content from a
-/// single nearest analysis position rather than the true continuous
-/// signal — did directly cause an audible artifact (crackle/low-frequency
-/// beat) and was fixed with cross-fading; see placeGrainAt()'s doc.
+///
+/// Known, accepted limitation, not silently swept aside: reading source
+/// content from a single nearest analysis position (rather than the true
+/// continuous signal) causes an audible crackle/low-frequency-beat
+/// artifact on real (non-stationary) audio — see placeGrainAt()'s doc for
+/// the mechanism, and docs/FINDINGS.md #19/#20 for the full story,
+/// including a cross-fade attempt that was tried, tested, shipped, then
+/// found by ear to not actually fix it (and cost real latency doing it) —
+/// reverted rather than kept for a benefit that didn't materialize. Fixing
+/// this properly needs correlation-based grain alignment before blending,
+/// not just blending — a bigger change than this project's timeline
+/// currently has room for; documented here so the gap is explicit rather
+/// than discovered by surprise.
 ///
 /// Not real-time-safe to construct (allocates its buffers once); shiftPitch()
 /// itself doesn't allocate — same shape as PitchShifter.
@@ -58,23 +67,19 @@ public:
     void shiftPitch (float detectedHz, float semitoneShift,
                       const std::vector<float>& input, std::vector<float>& output);
 
-    /// A **fixed** delay-line tap (3 pitch periods at `minHz`, see the
-    /// .cpp — was 2 before placeGrainAt()'s cross-fade fix needed a third
-    /// for the extra analysis bucket it now reads), not one that adapts
-    /// to the currently detected pitch — sized from the worst case so
-    /// it's always safely long enough, then used unconditionally
-    /// regardless of what's actually playing. This means a higher
-    /// detected pitch does *not* get a shorter real latency than a low
-    /// one: the underlying per-grain lookahead math is pitch-dependent,
-    /// but the reported/actual output delay isn't, since a single fixed
-    /// number is what JUCE's setLatencySamples() needs and a host can't
-    /// be told "it varies." Confirmed exact — not just an upper bound —
-    /// by benchmarks/PSOLALatencyProbe.cpp's onset probe at several
-    /// sample-rate/frequency combinations. Still lower than the phase
-    /// vocoder's fixed ~46-50ms window (docs/PERFORMANCE_LOG.md), though
-    /// by less than before the cross-fade fix — see that log's dated
-    /// entry for the honest before/after numbers and why the quality fix
-    /// was still judged worth the latency it cost back.
+    /// A **fixed** delay-line tap (2 pitch periods at `minHz`, see the
+    /// .cpp), not one that adapts to the currently detected pitch — sized
+    /// from the worst case so it's always safely long enough, then used
+    /// unconditionally regardless of what's actually playing. This means
+    /// a higher detected pitch does *not* get a shorter real latency than
+    /// a low one: the underlying per-grain lookahead math is pitch-
+    /// dependent, but the reported/actual output delay isn't, since a
+    /// single fixed number is what JUCE's setLatencySamples() needs and a
+    /// host can't be told "it varies." Confirmed exact — not just an
+    /// upper bound — by benchmarks/PSOLALatencyProbe.cpp's onset probe at
+    /// several sample-rate/frequency combinations. Still meaningfully —
+    /// just not dramatically — lower than the phase vocoder's fixed
+    /// ~46-50ms window (docs/PERFORMANCE_LOG.md).
     int getLatencySamples() const noexcept { return latencySamples; }
 
 private:

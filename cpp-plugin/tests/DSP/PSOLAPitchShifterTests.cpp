@@ -64,7 +64,7 @@ TEST_CASE ("PSOLA: zero semitone shift roughly preserves signal energy", "[psola
     PSOLAPitchShifter shifter (sampleRate);
 
     std::vector<float> lastOutput;
-    // latencySamples (3 * sampleRate/minHz ~= 1656 at 44.1kHz) is well
+    // latencySamples (2 * sampleRate/minHz ~= 1104 at 44.1kHz) is well
     // under one block here, but several blocks still lets the overlap-add
     // settle into a steady state rather than asserting on a
     // still-partially-transient first block.
@@ -144,15 +144,12 @@ TEST_CASE ("reported latency is pitch-independent, worst-case, and far below the
 
     PSOLAPitchShifter shifter (sampleRate);
 
-    // Matches the derivation in PSOLAPitchShifter.h/.cpp exactly: 3 *
-    // ceil(sampleRate / minHz) -- 3, not 2, since placeGrainAt()'s cross-
-    // fade between two analysis buckets (added to fix a real crackle/beat
-    // artifact -- docs/FINDINGS.md) needs an extra period of lookahead
-    // for the farther bucket. Asserting the formula, not just "some small
-    // number," so a future change to minHz/the derivation itself has to
-    // consciously update this test rather than silently pass.
+    // Matches the derivation in PSOLAPitchShifter.h/.cpp exactly: 2 *
+    // ceil(sampleRate / minHz). Asserting the formula, not just "some
+    // small number," so a future change to minHz/the derivation itself
+    // has to consciously update this test rather than silently pass.
     constexpr float minHz = 80.0f;
-    const int expectedLatency = 3 * (int) std::ceil (sampleRate / minHz);
+    const int expectedLatency = 2 * (int) std::ceil (sampleRate / minHz);
     CHECK (shifter.getLatencySamples() == expectedLatency);
 
     // The actual headline claim: at 44.1kHz the phase vocoder's window is
@@ -164,30 +161,29 @@ TEST_CASE ("reported latency is pitch-independent, worst-case, and far below the
     CHECK (shifter.getLatencySamples() < 2048);
 }
 
-// Deliberately NOT a test asserting the cross-fade fix eliminates the
-// crackle/beat artifact from docs/FINDINGS.md — three different automated
-// approaches were actually tried (external reference at the target
-// frequency: meaningless, since the reference's arbitrary phase has no
-// relationship to the shifter's own output phase; a stationary sine
-// input: cannot expose the bug at all, since a perfectly periodic
-// signal's analysis buckets are identical whether cross-faded or not;
-// a statistical outlier ratio against a mildly-modulated tremolo signal:
-// measured *lower* for the broken single-bucket version than the fixed
-// one on one real run, the opposite of discriminating) and none of them
-// reliably told single-bucket and cross-faded output apart within
-// reasonable effort. Matches this project's own precedent
-// (docs/FINDINGS.md #14): an automated metric passing and genuine
-// perceptual quality are not always the same bar, and asserting a
-// threshold that doesn't actually discriminate the regression would be
-// worse than no test — false confidence, not real coverage. The fix
-// itself is justified by the DSP reasoning in placeGrainAt()'s comment
-// (a discrete source-content jump at bucket boundaries is a real,
-// identifiable defect, independent of how hard it is to score
-// automatically) and was validated by ear against real audio, not by
-// this test. What this test actually checks is the sanity floor every
-// other shifter test in this file already uses: bounded, non-exploding
-// output — worth keeping as a coarse regression guard even without a
-// crackle-specific metric.
+// Deliberately NOT a test asserting the crackle/beat artifact from
+// docs/FINDINGS.md is fixed — it isn't, currently. A cross-fade between
+// the two nearest analysis buckets was implemented specifically to fix
+// it, and three different automated approaches were tried to verify that
+// fix (external reference at the target frequency: meaningless, since
+// the reference's arbitrary phase has no relationship to the shifter's
+// own output phase; a stationary sine input: cannot expose the bug at
+// all, since a perfectly periodic signal's analysis buckets are
+// identical whether cross-faded or not; a statistical outlier ratio
+// against a mildly-modulated tremolo signal: measured *lower* for the
+// single-bucket version than the cross-faded one on one real run, the
+// opposite of discriminating) — none of them reliably told the two
+// versions apart. The cross-fade shipped anyway on the strength of the
+// DSP reasoning, then was reverted after real listening found it didn't
+// fix the artifact (and plausibly made it worse — likely comb filtering
+// from blending two not-quite-phase-aligned grains, a known PSOLA
+// pitfall without correlation-based alignment first; see
+// docs/FINDINGS.md #19/#20 for the full account). Matches this project's
+// own earlier precedent (finding #14): an automated metric passing and
+// genuine perceptual quality are not always the same bar. What this
+// test actually checks is the sanity floor every other shifter test in
+// this file already uses: bounded, non-exploding output — worth keeping
+// as a coarse regression guard even without a crackle-specific metric.
 TEST_CASE ("shifting a non-stationary tone stays bounded (a wider net than a single stationary tone)", "[psola-shifter]")
 {
     constexpr double sampleRate = 44100.0;
