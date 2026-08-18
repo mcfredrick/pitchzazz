@@ -23,6 +23,12 @@ float midiToHz (float midi) noexcept
     return 440.0f * std::pow (2.0f, (midi - 69.0f) / 12.0f);
 }
 
+float centsOffsetFromNearestNote (float freqHz) noexcept
+{
+    const float midi = hzToMidi (freqHz);
+    return (midi - std::round (midi)) * 100.0f;
+}
+
 Corrector::Corrector (int blockSizeIn, double sampleRate, int windowSizeMs, Scale scaleIn)
     : detector (blockSizeIn), shifter (windowSizeMs, sampleRate), blockSize (blockSizeIn), scale (scaleIn)
 {

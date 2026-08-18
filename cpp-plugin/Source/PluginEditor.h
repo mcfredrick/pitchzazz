@@ -50,6 +50,20 @@
     doesn't implement them (currently just the Rust engine — see
     PitchEngine.h) so the UI is honest about why they stopped doing
     anything rather than pretending they still apply.
+
+    Tuner-style cents meter (added 2026-08-17): a thin gauge under the
+    DETECTED display showing pitchzazz::centsOffsetFromNearestNote — how
+    sharp/flat the raw input is relative to the nearest chromatic note,
+    i.e. the sub-semitone detail the DETECTED note name's own rounding
+    discards. Deliberately measured against the nearest chromatic note,
+    not the scale-corrected target semitoneShift represents — see that
+    function's doc in Corrector.h for why. Lightly EMA-smoothed (same
+    alpha as the performance meters below) — unlike the note-name text,
+    which stays unsmoothed on purpose (a name is categorical; smoothing
+    it would fabricate a fake glide between notes), a cents offset is
+    continuous, so smoothing only damps block-to-block jitter without
+    inventing anything, the same reasoning that justifies smoothing on a
+    real hardware tuner's needle.
 */
 class PitchzazzAudioProcessorEditor : public juce::AudioProcessorEditor,
                                        private juce::Timer
@@ -85,6 +99,7 @@ private:
 
     pitchzazz::LCDDisplay detectedPitchDisplay;
     pitchzazz::LCDDisplay correctedPitchDisplay;
+    pitchzazz::CentsMeter detectedCentsMeter;
 
     juce::Label performanceHeaderLabel { {}, "PERFORMANCE" };
     juce::Label latencyValueLabel { {}, "-" };
@@ -110,6 +125,12 @@ private:
     float smoothedDetectUs = 0.0f;
     float smoothedQuantizeUs = 0.0f;
     float smoothedShiftUs = 0.0f;
+
+    // EMA state for the cents meter, tracked separately from the timing
+    // values above since it resets on a different condition (voicing
+    // onset, not an engine switch) — see timerCallback()'s comment.
+    float smoothedCents = 0.0f;
+    bool centsWasVoiced = false;
 
     // Set true by the engine selector's onChange, consumed by the next
     // timerCallback() tick: without this, switching engines would EMA-

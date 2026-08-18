@@ -500,6 +500,35 @@ silent permission denial (no crash, no error, no samples). See
   notes that never happened in the actual audio. New `CorrectorWorker`/
   `PluginProcessor` getters (`getLastDetectedHz`/`getLastSemitoneShift`)
   mirror the existing timing-getter pattern exactly.
+- **Tuner-style cents meter, done 2026-08-17** — a natural follow-on to
+  the live pitch display above, prompted by a reference screenshot of
+  Antares Auto-Tune Pro's central "how in tune is the input" dial.
+  `pitchzazz::centsOffsetFromNearestNote` (`Corrector.h`/`.cpp`) is a new
+  free function, tested in `CorrectorTests.cpp` alongside `hzToMidi`/
+  `midiToHz`: signed cents offset of the detected pitch from the
+  *nearest chromatic* note, bounded to [-50, +50] by construction of
+  nearest-integer rounding — deliberately not measured against
+  `Corrector::process()`'s scale-corrected target (`semitoneShift`),
+  since that can be a several-hundred-cent jump whenever the nearest
+  chromatic note isn't in the active scale, which would pin a "how in
+  tune" reading at an extreme for most out-of-scale content instead of
+  showing genuine intonation. `pitchzazz::CentsMeter`
+  (`MeterComponents.h`) renders it as a thin horizontal gauge under the
+  DETECTED LCD display (a linear strip rather than Auto-Tune's circular
+  dial — this plugin's window is compact) — ticks at -50/-25/0/+25/+50,
+  a filled span from centre to the current reading, green once within
+  +-5 cents (the rough tolerance hardware tuners typically use for their
+  in-tune LED) and dimmed to near-invisible on silence/unvoiced input,
+  so "no signal" can't be mistaken for "singing exactly in tune." Lightly
+  EMA-smoothed in the editor (same alpha as the performance meters) but
+  explicitly *not* the same no-smoothing choice the note-name display
+  above makes: a name is categorical, so smoothing it fabricates a fake
+  glide between notes, but a cents offset is continuous, so smoothing it
+  only damps block-to-block jitter, the same reasoning real hardware
+  tuner needles rely on — snaps instantly (skips one tick of blending)
+  on voicing onset and on an engine switch rather than blending from a
+  stale reading that belongs to a different note or engine. All 23 C++
+  test cases (247 assertions) still pass.
 - **Additional musical modes, raised 2026-08-17, not started:** `Scale`
   already generalizes to any diatonic mode as a fixed interval pattern
   rotated by the tonic (not a lookup table) — `ScaleMode`'s own doc
