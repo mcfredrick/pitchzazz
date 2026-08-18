@@ -589,6 +589,75 @@ silent permission denial (no crash, no error, no samples). See
   logic in `Corrector`/`CorrectorWorker` to read incoming MIDI notes and
   override `nearestInScaleMidi`'s target — deliberately out of scope for
   the 4-day sprint (`docs/ROADMAP.md`'s prioritization criteria).
+
+  **Monophonic version, done 2026-08-18 (`feature/midi-vocoder-mono`
+  branch).** Deliberately scoped to one held note at a time, not the full
+  polyphonic chord-harmonizer the original framing above describes — that
+  needs N simultaneous shifted voices, a real architectural change, not a
+  bigger version of this one; still queued as a real follow-on, not
+  attempted here. Preceded by research into prior art: Antares Auto-Tune's
+  documented "Target Notes Via MIDI" mode (monophonic, retune speed still
+  governs the glide to the MIDI target) was the closest commercial analog,
+  but its documented no-note-held behavior — bypass entirely — didn't fit
+  this project's live-mic framing as well as it fits Auto-Tune's own
+  pre-timed offline-track use case, so that choice was exposed as a user
+  parameter instead of hardcoded: a new `MidiFallbackMode` (`Scale`
+  default, `Hold Last`, `Bypass`, `Silence`) controls what happens with no
+  note held, selectable from a new GUI combo box.
+
+  New `MidiNoteStack` (`Source/DSP/MidiNoteStack.h`) is a fixed-capacity,
+  allocation-free last-note-priority tracker — confirmed against JUCE's
+  own API first that neither `MidiKeyboardState` (UI key-tracking only)
+  nor `Synthesiser` (polyphonic voice allocation) solves this directly, so
+  hand-rolling was the right call, not a wheel to avoid reinventing.
+  `PluginProcessor::processBlock` feeds it directly from the MIDI thread
+  it already receives — the first DSP-facing parameter in this codebase
+  written from the audio thread rather than the message thread, though
+  the existing relaxed-atomic worker-handoff mechanism needed no change
+  for that. `PitchEngine::setMidiTargetNote`/`setMidiFallbackMode`/
+  `supportsMidiTargeting()` follow the exact default-no-op,
+  capability-gated shape already established for retune controls and
+  grain width — C++ only (Native + PSOLA), Rust engine untouched, same
+  precedent. `NEEDS_MIDI_INPUT` flipped to `TRUE` in `CMakeLists.txt`.
+
+  **Discontinuity-safety pass, same day, user-directed before any code
+  shipped rather than found afterward:** target-note changes (MIDI
+  press/release, fallback-mode changes) reuse the existing
+  `glideTowards`/retune-speed glide path unchanged — no new risk, since a
+  MIDI-driven target change is the same kind of event as any other target
+  change already covered by existing tests. `Silence` mode was the one
+  real risk: an early design zeroed output samples directly, which would
+  have reintroduced the exact class of bug `docs/FINDINGS.md` #14 already
+  found once (a hard state/amplitude cut at a block boundary, audible as
+  a click). Fixed before it ever ran: a per-*sample* (not per-block)
+  one-pole gain ramp, reusing `glideTowards`'s own formula at a short,
+  fixed, non-user-facing time constant (`silenceRampMs = 10ms`,
+  `RetuneSmoothing.h`) — applied after the shift stage, so the shifter's
+  internal state stays warm through a mute exactly like it does through
+  the hot-swap crossfade fix. A new self-calibrated test
+  (`"midi fallback silence fades out smoothly rather than cutting
+  abruptly"`, both engines) checks the first released sample retains real
+  amplitude rather than cutting to near-zero, mirroring
+  `HotSwapDropoutTests.cpp`'s methodology.
+
+  16 new test cases (8 in a new `MidiNoteStackTests.cpp`, 5 in
+  `CorrectorTests.cpp`, 3 in `PSOLACorrectorTests.cpp` — PSOLA's subset
+  skips the `holdLastNote`/`scaleQuantize`-equivalence cases, already
+  covered identically by the shared `MidiFallbackMode` logic on the
+  native engine's side) — full suite now 52 cases / 2349 assertions, all
+  passing. `pluginval` strictness 5 passes on the rebuilt VST3. The
+  discontinuity risk above was designed around proactively, not
+  found-and-fixed after shipping, so no `docs/FINDINGS.md` entry for
+  that specific risk — but a second, real bug *was* found by validation:
+  `auval` (not `pluginval`, which has no per-format AU-type concept to
+  catch this) flagged the AU build's declared component type as still
+  `kAudioUnitType_Effect` ('aufx') after `NEEDS_MIDI_INPUT` flipped to
+  `TRUE` — Apple's convention wants `kAudioUnitType_MusicEffect` ('aumf')
+  for an audio effect that also accepts MIDI. Fixed in `CMakeLists.txt`;
+  `auval -v aumf PIHZ MAFR` re-run clean. Full story: `docs/FINDINGS.md`
+  #22 — the same *class* of AU-type mismatch as finding #8, mirror image
+  of it, and direct fresh evidence for this project's own "one validator
+  isn't enough" thesis (finding #11, and the code tour's stop 8).
 - **Expose `overSampling` as a user-facing quality control, added
   2026-08-17:** it meaningfully affects phase-vocoder reconstruction
   quality (`docs/PERFORMANCE_LOG.md`'s "OVER_SAMPLING re-evaluated"

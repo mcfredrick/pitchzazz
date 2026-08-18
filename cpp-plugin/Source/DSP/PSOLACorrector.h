@@ -48,6 +48,12 @@ public:
     /// since a phase vocoder has no concept of "grain."
     void setGrainWidthMultiplier (float multiplier) noexcept { shifter.setGrainWidthMultiplier (multiplier); }
 
+    /// Monophonic MIDI vocoder mode — same shape and reasoning as
+    /// Corrector's equivalent setters; see Corrector.h's doc and
+    /// MidiFallbackMode's doc.
+    void setMidiTargetNote (int noteNumber) noexcept { midiTargetNote = (noteNumber >= 0 && noteNumber <= 127) ? noteNumber : -1; }
+    void setMidiFallbackMode (MidiFallbackMode mode) noexcept { midiFallbackMode = mode; }
+
     /// `samples.size()` must equal the `blockSize` passed to the constructor.
     [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate);
 
@@ -62,6 +68,11 @@ private:
     float correctionAmount = correctionAmountMax;
     float retuneSpeedMs = retuneSpeedMsMin;
     float previousAppliedShift = 0.0f;
+
+    int midiTargetNote = -1;
+    MidiFallbackMode midiFallbackMode = MidiFallbackMode::scaleQuantize;
+    int lastKnownMidiNote = -1;
+    float silenceGain = 1.0f; // see Corrector.h's equivalent member for the anti-click reasoning
 };
 
 } // namespace pitchzazz

@@ -95,6 +95,7 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
             resetSmoothingOnNextTick = true;
             updateRetuneControlsEnablement();
             updateGrainWidthControlEnablement();
+            updateMidiTargetingEnablement();
         }
     };
     addAndMakeVisible (engineLabel);
@@ -134,6 +135,22 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     grainWidthSlider.onValueChange = [this] { processorRef.setGrainWidthMultiplier ((float) grainWidthSlider.getValue()); };
     addAndMakeVisible (grainWidthLabel);
     addAndMakeVisible (grainWidthSlider);
+
+    // Four discrete named behaviours (PitchEngine.h's MidiFallbackMode doc)
+    // — order matches the enum's declaration order, item IDs 1-based as
+    // usual. "Scale" first since it's the default and reproduces this
+    // plugin's original (pre-MIDI) behaviour exactly.
+    midiFallbackBox.addItem ("Scale", 1);
+    midiFallbackBox.addItem ("Hold Last", 2);
+    midiFallbackBox.addItem ("Bypass", 3);
+    midiFallbackBox.addItem ("Silence", 4);
+    midiFallbackBox.setSelectedId (static_cast<int> (processorRef.getMidiFallbackMode()) + 1, juce::dontSendNotification);
+    midiFallbackBox.onChange = [this]
+    {
+        processorRef.setMidiFallbackMode (static_cast<pitchzazz::MidiFallbackMode> (midiFallbackBox.getSelectedId() - 1));
+    };
+    addAndMakeVisible (midiFallbackLabel);
+    addAndMakeVisible (midiFallbackBox);
 
     // Cyan for "detected" (matches the detect-stage meter below) and
     // green for "corrected" (matches the shift-stage meter, and reads as
@@ -195,16 +212,18 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     addAndMakeVisible (shiftValueLabel);
     addAndMakeVisible (totalValueLabel);
 
-    // Height computed from resized()'s layout sum: 602px of stacked
+    // Height computed from resized()'s layout sum: 638px of stacked
     // content (tonic/mode/engine rows, the three creative-control
-    // sliders, the pitch displays, the cents meter, bypass, the divider,
-    // and the three performance meters) plus the 16px top/bottom margins
-    // from getLocalBounds().reduced(16) — kept in sync with resized() by
-    // hand since JUCE has no layout-measurement API to derive this from.
-    setSize (320, 634);
+    // sliders, the MIDI-fallback selector, the pitch displays, the cents
+    // meter, bypass, the divider, and the three performance meters) plus
+    // the 16px top/bottom margins from getLocalBounds().reduced(16) —
+    // kept in sync with resized() by hand since JUCE has no layout-
+    // measurement API to derive this from.
+    setSize (320, 670);
 
     updateRetuneControlsEnablement();
     updateGrainWidthControlEnablement();
+    updateMidiTargetingEnablement();
 
     // 10Hz: fast enough to read as "live" for a demo, slow enough not to
     // burden the message thread — this is a UI poll, not audio-path code,
@@ -223,6 +242,7 @@ void PitchzazzAudioProcessorEditor::timerCallback()
 {
     updateRetuneControlsEnablement();
     updateGrainWidthControlEnablement();
+    updateMidiTargetingEnablement();
 
     // EMA smoothing — see the class doc for why this over a windowed
     // average. Applied before anything derived from these values (labels
@@ -326,6 +346,11 @@ void PitchzazzAudioProcessorEditor::updateGrainWidthControlEnablement()
     grainWidthSlider.setEnabled (processorRef.activeEngineSupportsGrainWidthControl());
 }
 
+void PitchzazzAudioProcessorEditor::updateMidiTargetingEnablement()
+{
+    midiFallbackBox.setEnabled (processorRef.activeEngineSupportsMidiTargeting());
+}
+
 void PitchzazzAudioProcessorEditor::updateProcessorScale()
 {
     const int tonicPitchClass = tonicBox.getSelectedId() - 1;
@@ -393,6 +418,12 @@ void PitchzazzAudioProcessorEditor::resized()
     auto grainWidthRow = area.removeFromTop (28);
     grainWidthLabel.setBounds (grainWidthRow.removeFromLeft (60));
     grainWidthSlider.setBounds (grainWidthRow);
+
+    area.removeFromTop (8);
+
+    auto midiFallbackRow = area.removeFromTop (28);
+    midiFallbackLabel.setBounds (midiFallbackRow.removeFromLeft (60));
+    midiFallbackBox.setBounds (midiFallbackRow);
 
     area.removeFromTop (16);
     auto pitchDisplayRow = area.removeFromTop (54);

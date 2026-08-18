@@ -145,3 +145,122 @@ TEST_CASE ("positive retune speed glides towards the target instead of snapping 
     }
     CHECK (std::abs (lastShift - instantShift) < std::abs (instantShift) * 0.1f);
 }
+
+// Monophonic MIDI vocoder mode (docs/ROADMAP.md Phase 5).
+
+TEST_CASE ("held MIDI note overrides scale quantization", "[corrector][midi-vocoder]")
+{
+    const Scale scale { 0, ScaleMode::major };
+    constexpr double sampleRate = 44100.0;
+    constexpr int blockSize = 2048;
+
+    Corrector scaleOnly (blockSize, sampleRate, 50, scale);
+    Corrector midiTargeted (blockSize, sampleRate, 50, scale);
+    midiTargeted.setMidiTargetNote (72); // C5 -- deliberately far from what scale-quantization would pick
+
+    const auto input = sineBlock (detunedFreq, sampleRate, blockSize, 0);
+    const float scaleShift = scaleOnly.process (input, sampleRate).semitoneShift;
+    const float midiShift = midiTargeted.process (input, sampleRate).semitoneShift;
+
+    REQUIRE (std::abs (scaleShift) < 1.0f); // sanity: scale-quantize's target is close (A4 is already in C major)
+    CHECK (midiShift > 2.0f); // MIDI's target (C5) is a real ~3-semitone jump, not the scale's small correction
+}
+
+TEST_CASE ("midi fallback scaleQuantize (the default) matches no-MIDI-targeting behaviour exactly", "[corrector][midi-vocoder]")
+{
+    const Scale scale { 0, ScaleMode::major };
+    constexpr double sampleRate = 44100.0;
+    constexpr int blockSize = 2048;
+
+    Corrector untouched (blockSize, sampleRate, 50, scale);
+    Corrector explicitScaleMode (blockSize, sampleRate, 50, scale);
+    explicitScaleMode.setMidiFallbackMode (MidiFallbackMode::scaleQuantize); // the default, set explicitly for clarity
+
+    const auto input = sineBlock (detunedFreq, sampleRate, blockSize, 0);
+    CHECK (untouched.process (input, sampleRate).semitoneShift == explicitScaleMode.process (input, sampleRate).semitoneShift);
+}
+
+TEST_CASE ("midi fallback holdLastNote keeps correcting to the last-held note after release", "[corrector][midi-vocoder]")
+{
+    const Scale scale { 0, ScaleMode::major };
+    constexpr double sampleRate = 44100.0;
+    constexpr int blockSize = 2048;
+
+    Corrector corrector (blockSize, sampleRate, 50, scale);
+    corrector.setMidiFallbackMode (MidiFallbackMode::holdLastNote);
+    corrector.setMidiTargetNote (72); // C5
+
+    const auto input = sineBlock (detunedFreq, sampleRate, blockSize, 0);
+    const float heldShift = corrector.process (input, sampleRate).semitoneShift;
+
+    corrector.setMidiTargetNote (-1); // release
+    const float afterReleaseShift = corrector.process (sineBlock (detunedFreq, sampleRate, blockSize, 1), sampleRate).semitoneShift;
+
+    // Same target (C5) before and after release -- holdLastNote's whole
+    // point. A loose tolerance, not bit-for-bit: this is about the
+    // *target* matching, not incidental floating-point identity between
+    // two separate process() calls.
+    CHECK (std::abs (afterReleaseShift - heldShift) < 0.05f);
+}
+
+TEST_CASE ("midi fallback bypass applies no correction when no note is held", "[corrector][midi-vocoder]")
+{
+    const Scale scale { 0, ScaleMode::major };
+    constexpr double sampleRate = 44100.0;
+    constexpr int blockSize = 2048;
+
+    Corrector corrector (blockSize, sampleRate, 50, scale);
+    corrector.setMidiFallbackMode (MidiFallbackMode::bypass);
+    // No setMidiTargetNote call -- defaults to -1, i.e. never held.
+
+    const auto input = sineBlock (detunedFreq, sampleRate, blockSize, 0);
+    CHECK (corrector.process (input, sampleRate).semitoneShift == 0.0f);
+}
+
+TEST_CASE ("midi fallback silence fades out smoothly rather than cutting abruptly", "[corrector][midi-vocoder]")
+{
+    // Self-calibrated against the signal's own held-note amplitude, same
+    // spirit as HotSwapDropoutTests.cpp's baseline comparison: a real
+    // click would show up as the very first released sample dropping to
+    // near-zero; a smooth ramp does not, even though the ramp is short
+    // enough (silenceRampMs = 10ms) to be most of the way to silent well
+    // before this block ends.
+    const Scale scale { 0, ScaleMode::major };
+    constexpr double sampleRate = 44100.0;
+    constexpr int blockSize = 2048;
+
+    Corrector corrector (blockSize, sampleRate, 50, scale);
+    corrector.setMidiFallbackMode (MidiFallbackMode::silence);
+    corrector.setMidiTargetNote (69); // A4 held
+
+    float lastHeldBlockMaxAbs = 0.0f;
+    for (int block = 0; block < 3; ++block)
+    {
+        const auto input = sineBlock (detunedFreq, sampleRate, blockSize, block);
+        const auto result = corrector.process (input, sampleRate);
+        lastHeldBlockMaxAbs = 0.0f;
+        for (float s : result.samples)
+            lastHeldBlockMaxAbs = std::max (lastHeldBlockMaxAbs, std::abs (s));
+    }
+    REQUIRE (lastHeldBlockMaxAbs > 0.1f); // sanity: really was audible while held
+
+    corrector.setMidiTargetNote (-1); // release
+
+    const auto releaseResult = corrector.process (sineBlock (detunedFreq, sampleRate, blockSize, 3), sampleRate);
+    const float firstReleasedSampleAbs = std::abs (releaseResult.samples.front());
+    CHECK (firstReleasedSampleAbs > lastHeldBlockMaxAbs * 0.1f); // did not cut to near-zero instantly
+
+    // Enough further released blocks for the ramp to fully settle --
+    // confirms silence mode actually reaches silence, not just avoids a
+    // click on the way there.
+    float lastMaxAbs = 0.0f;
+    for (int block = 4; block < 20; ++block)
+    {
+        const auto input = sineBlock (detunedFreq, sampleRate, blockSize, block);
+        const auto result = corrector.process (input, sampleRate);
+        lastMaxAbs = 0.0f;
+        for (float s : result.samples)
+            lastMaxAbs = std::max (lastMaxAbs, std::abs (s));
+    }
+    CHECK (lastMaxAbs < 1e-3f);
+}

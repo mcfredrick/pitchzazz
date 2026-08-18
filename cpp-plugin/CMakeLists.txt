@@ -345,7 +345,13 @@ juce_add_plugin(${PROJECT_NAME}
     COMPANY_NAME ${COMPANY_NAME}
     BUNDLE_ID ${PROJECT_BUNDLE_ID}
     IS_SYNTH FALSE
-    NEEDS_MIDI_INPUT FALSE
+    # Monophonic MIDI vocoder mode (docs/ROADMAP.md Phase 5): incoming
+    # MIDI notes set the pitch-correction target. Stays an audio effect
+    # that also accepts MIDI as a control input, not an instrument
+    # (IS_SYNTH) or a MIDI-only effect (IS_MIDI_EFFECT, which is
+    # MIDI-in/MIDI-out with no audio I/O at all — the wrong plugin type
+    # for this, see docs/FINDINGS.md #8's history of this exact mixup).
+    NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     NEEDS_EDITOR TRUE
@@ -357,7 +363,19 @@ juce_add_plugin(${PROJECT_NAME}
     # Note: CLAP format is added separately via clap-juce-extensions below
     PRODUCT_NAME ${PROJECT_NAME}
     VERSION ${PLUGIN_VERSION}
-    AU_MAIN_TYPE kAudioUnitType_Effect
+    # kAudioUnitType_MusicEffect ('aumf'), not kAudioUnitType_Effect
+    # ('aufx'): this plugin implements MusicDeviceMIDIEvent now that MIDI
+    # vocoder mode (docs/ROADMAP.md Phase 5) needs NEEDS_MIDI_INPUT TRUE
+    # above, and Apple's AU convention for "audio effect that also accepts
+    # MIDI" is the Music Effect type, not the plain Effect type -- auval
+    # flagged the mismatch explicitly ("AU implements
+    # MusicDeviceMIDIEvent but is of type 'aufx' (it should be 'aumf')")
+    # rather than silently failing, the same class of AU-type mixup
+    # docs/FINDINGS.md #8 already found once in this project, just the
+    # mirror image of it (that one was mistakenly a MIDI-only effect with
+    # no audio I/O; this one was correctly an audio effect but hadn't
+    # been updated for its new MIDI-accepting capability).
+    AU_MAIN_TYPE kAudioUnitType_MusicEffect
     AU_EXPORT_PREFIX "${PROJECT_NAME}AU"
     AU_SANDBOX_SAFE TRUE
     VST3_CATEGORIES "Drum|Tools"

@@ -48,16 +48,16 @@
     {
       "title": "7. Hot-swap architecture + the 20-30x illusion",
       "file": "cpp-plugin/Source/DSP/CorrectorWorker.cpp",
-      "line": 71,
+      "line": 87,
       "pattern": "void CorrectorWorker::requestEngineSwap",
-      "description": "A new pitch-correction engine (Rust, C++ phase vocoder, or C++ TD-PSOLA) is handed off via one atomic pointer exchange, picked up between blocks, never mid-`process()`.\n\n![Hot-swap: a new engine is stored into one atomic pointer, picked up by the worker thread between blocks, then blended in via a crossfade over four blocks](assets/hot-swap.svg)\n\nThe first swap discarded the outgoing engine's warmed-up internal state, causing an audible glitch no unit test or plugin validator caught — `docs/FINDINGS.md` #14. Separately: a first-pass Rust-vs-C++ benchmark looked 20-30x apart. It was a debug-vs-release build mismatch, not a language difference — full numbers in `docs/COMPARISON.md`."
+      "description": "A new pitch-correction engine (Rust, C++ phase vocoder, or C++ TD-PSOLA) is handed off via one atomic pointer exchange, picked up between blocks, never mid-`process()`.\n\n![Hot-swap: a new engine is stored into one atomic pointer, picked up by the worker thread between blocks, then blended in via a crossfade over four blocks](assets/hot-swap.svg)\n\nThe first swap discarded the outgoing engine's warmed-up internal state, causing an audible glitch no unit test or plugin validator caught — `docs/FINDINGS.md` #14. Separately: a first-pass Rust-vs-C++ benchmark looked 20-30x apart. It was a debug-vs-release build mismatch, not a language difference — full numbers in `docs/COMPARISON.md`.\n\nThe lesson stuck: MIDI vocoder mode's \"silence\" fallback later needed the identical discipline — an early draft muted output with a hard per-block cut, which would have reintroduced this exact discontinuity class. Fixed *before* it ever shipped, not found-and-fixed again, with a per-sample gain ramp instead of a block-boundary cut."
     },
     {
       "title": "8. One validator isn't enough",
       "file": "docs/FINDINGS.md",
       "line": 28,
       "pattern": "juce::Thread` destructor asserts (UB) if destroyed while still running",
-      "description": "This row: a real crash bug that passed PluginVal at strictness 5 cleanly, then was caught by Apple's own `auval` — run specifically because relying on one validator felt insufficient. Direct evidence two independently-implemented tools catch genuinely different bug classes.\n\nFull ledger: every other row in this table, plus the tooling breakdown further down."
+      "description": "This row: a real crash bug that passed PluginVal at strictness 5 cleanly, then was caught by Apple's own `auval` — run specifically because relying on one validator felt insufficient. Direct evidence two independently-implemented tools catch genuinely different bug classes.\n\nStill true a session later: finding #22 (MIDI vocoder mode) is the same lesson recurring in mirror image — an AU component-type flag (`aufx` vs. `aumf`) went stale after adding MIDI input, `pluginval` had no per-format concept to catch it, `auval` flagged it as an explicit warning even while still reporting an overall pass.\n\nFull ledger: every other row in this table, plus the tooling breakdown further down."
     }
   ]
 }

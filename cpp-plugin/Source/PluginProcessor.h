@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DSP/CorrectorWorker.h"
+#include "DSP/MidiNoteStack.h"
 #include "DSP/PSOLAPitchShifter.h" // grainWidthMultiplierMin/Max, for the getter's/UI's range
 #include "DSP/PitchEngineRegistry.h"
 #include "DSP/RetuneSmoothing.h"
@@ -72,6 +73,18 @@ public:
     void setGrainWidthMultiplier (float multiplier) noexcept;
     float getGrainWidthMultiplier() const noexcept { return currentGrainWidthMultiplier; }
     bool activeEngineSupportsGrainWidthControl() const noexcept;
+
+    /// Monophonic MIDI vocoder mode (docs/ROADMAP.md Phase 5) — the
+    /// fallback-mode setter/getter follow the exact same message-thread
+    /// forwarding shape as the controls above. There's no
+    /// `setMidiTargetNote` here: unlike every other DSP-facing setter on
+    /// this class, that one is driven directly from `processBlock` (the
+    /// audio thread, where JUCE delivers MIDI), not the editor — see
+    /// processBlock's own comment for why forwarding it through here
+    /// instead would just be an extra, pointless hop.
+    void setMidiFallbackMode (pitchzazz::MidiFallbackMode mode) noexcept;
+    pitchzazz::MidiFallbackMode getMidiFallbackMode() const noexcept { return currentMidiFallbackMode; }
+    bool activeEngineSupportsMidiTargeting() const noexcept;
 
     /// Hot-swaps the active pitch-correction engine (docs/ROADMAP.md
     /// Phase 3) — `engineId` must be one of pitchzazz::availableEngines()'
@@ -153,6 +166,14 @@ private:
     float currentCorrectionAmount = pitchzazz::correctionAmountMax;
     float currentRetuneSpeedMs = pitchzazz::retuneSpeedMsMin;
     float currentGrainWidthMultiplier = 1.0f; // PSOLAPitchShifter's own default — see its doc
+    pitchzazz::MidiFallbackMode currentMidiFallbackMode = pitchzazz::MidiFallbackMode::scaleQuantize;
+
+    // Last-note-priority MIDI tracking (docs/ROADMAP.md Phase 5) — owned
+    // here rather than by the worker since it's fed directly from
+    // processBlock's MidiBuffer, on the audio thread; only the *result*
+    // (one active note, or -1) crosses to the worker, via the same
+    // relaxed-atomic pattern as every other cross-thread parameter here.
+    pitchzazz::MidiNoteStack midiNoteStack;
 
     // juce::Thread asserts (UB) if destroyed while still running. Hosts
     // aren't guaranteed to call releaseResources() before destroying the

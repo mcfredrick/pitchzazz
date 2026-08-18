@@ -66,6 +66,15 @@
     have defeated the latency advantage that's this engine's whole reason
     for existing.
 
+    MIDI vocoder mode (added 2026-08-18): a monophonic MIDI note overrides
+    scale-quantization as the correction target — see PitchEngine.h's
+    MidiFallbackMode doc for the four "no note held" behaviours (Scale,
+    Hold Last, Bypass, Silence) exposed via the combo box below. PSOLA and
+    Native C++ only, same "disabled not hidden" pattern as the other
+    creative controls, gated on its own capability flag
+    (activeEngineSupportsMidiTargeting) since it's a property of the
+    Corrector/PSOLACorrector orchestration layer, not every engine.
+
     Tuner-style cents meter (added 2026-08-17, widened to the full row
     2026-08-17): a thin gauge spanning the full width under both the
     DETECTED and CORRECTED displays, showing
@@ -118,6 +127,12 @@ private:
     // enablement condition is narrower than the two above.
     juce::Label grainWidthLabel { {}, "Width" };
     juce::Slider grainWidthSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+
+    // MIDI vocoder mode's "no note held" fallback (docs/ROADMAP.md Phase
+    // 5) — see the class doc. A combo box, not a slider, since these are
+    // four discrete named behaviours, not a continuous range.
+    juce::Label midiFallbackLabel { {}, "MIDI" };
+    juce::ComboBox midiFallbackBox;
 
     pitchzazz::LCDDisplay detectedPitchDisplay;
     pitchzazz::LCDDisplay correctedPitchDisplay;
@@ -185,6 +200,10 @@ private:
     /// unique creative controls follows the same one-flag/one-function
     /// pattern rather than growing one function's branching logic further.
     void updateGrainWidthControlEnablement();
+
+    /// Same shape as the two enablement functions above, for MIDI vocoder
+    /// mode's fallback-mode selector.
+    void updateMidiTargetingEnablement();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PitchzazzAudioProcessorEditor)
 };

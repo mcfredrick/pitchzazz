@@ -25,6 +25,7 @@ CorrectorWorker::CorrectorWorker (int blockSizeIn, double sampleRateIn, std::uni
     activeLatencySamples.store (engine->getLatencySamples(), std::memory_order_relaxed);
     activeSupportsRetuneControls.store (engine->supportsRetuneControls(), std::memory_order_relaxed);
     activeSupportsGrainWidthControl.store (engine->supportsGrainWidthControl(), std::memory_order_relaxed);
+    activeSupportsMidiTargeting.store (engine->supportsMidiTargeting(), std::memory_order_relaxed);
 }
 
 CorrectorWorker::~CorrectorWorker()
@@ -66,6 +67,21 @@ void CorrectorWorker::setGrainWidthMultiplier (float multiplier) noexcept
 bool CorrectorWorker::getActiveSupportsGrainWidthControl() const noexcept
 {
     return activeSupportsGrainWidthControl.load (std::memory_order_relaxed);
+}
+
+void CorrectorWorker::setMidiTargetNote (int noteNumber) noexcept
+{
+    pendingMidiTargetNote.store (noteNumber, std::memory_order_relaxed);
+}
+
+void CorrectorWorker::setMidiFallbackMode (MidiFallbackMode mode) noexcept
+{
+    pendingMidiFallbackMode.store (mode, std::memory_order_relaxed);
+}
+
+bool CorrectorWorker::getActiveSupportsMidiTargeting() const noexcept
+{
+    return activeSupportsMidiTargeting.load (std::memory_order_relaxed);
 }
 
 void CorrectorWorker::requestEngineSwap (std::unique_ptr<PitchEngine> newEngine) noexcept
@@ -175,10 +191,14 @@ void CorrectorWorker::run()
         const float correctionAmount = pendingCorrectionAmount.load (std::memory_order_relaxed);
         const float retuneSpeedMs = pendingRetuneSpeedMs.load (std::memory_order_relaxed);
         const float grainWidthMultiplier = pendingGrainWidthMultiplier.load (std::memory_order_relaxed);
+        const int midiTargetNote = pendingMidiTargetNote.load (std::memory_order_relaxed);
+        const MidiFallbackMode midiFallbackMode = pendingMidiFallbackMode.load (std::memory_order_relaxed);
         engine->setScale (scale);
         engine->setCorrectionAmount (correctionAmount);
         engine->setRetuneSpeedMs (retuneSpeedMs);
         engine->setGrainWidthMultiplier (grainWidthMultiplier);
+        engine->setMidiTargetNote (midiTargetNote);
+        engine->setMidiFallbackMode (midiFallbackMode);
 
         if (crossfadeEngine != nullptr)
         {
@@ -195,6 +215,8 @@ void CorrectorWorker::run()
             crossfadeEngine->setCorrectionAmount (correctionAmount);
             crossfadeEngine->setRetuneSpeedMs (retuneSpeedMs);
             crossfadeEngine->setGrainWidthMultiplier (grainWidthMultiplier);
+            crossfadeEngine->setMidiTargetNote (midiTargetNote);
+            crossfadeEngine->setMidiFallbackMode (midiFallbackMode);
             const auto oldResult = engine->process (analysisBuffer, sampleRate);
             const auto newResult = crossfadeEngine->process (analysisBuffer, sampleRate);
 
@@ -245,6 +267,7 @@ void CorrectorWorker::run()
                 activeLatencySamples.store (engine->getLatencySamples(), std::memory_order_relaxed);
                 activeSupportsRetuneControls.store (engine->supportsRetuneControls(), std::memory_order_relaxed);
                 activeSupportsGrainWidthControl.store (engine->supportsGrainWidthControl(), std::memory_order_relaxed);
+                activeSupportsMidiTargeting.store (engine->supportsMidiTargeting(), std::memory_order_relaxed);
             }
         }
         else

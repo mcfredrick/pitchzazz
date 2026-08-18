@@ -42,6 +42,23 @@ struct StageTimings
     double totalUs() const noexcept { return detectUs + quantizeUs + shiftUs; }
 };
 
+/// What a MIDI-targeted engine does when no MIDI note is currently held
+/// (docs/ROADMAP.md Phase 5's "monophonic MIDI vocoder mode"). Antares
+/// Auto-Tune's own documented "Target Notes Via MIDI" mode bypasses
+/// entirely with no note held — a deliberate choice for its pre-timed,
+/// offline-track use case, not necessarily the right default for this
+/// project's live-mic framing, so all four options are exposed as a user
+/// choice rather than picking one silently. Lives here (not PitchEngine.h,
+/// where the setter that consumes it is declared) because PitchEngine.h
+/// already includes this file — the reverse include would be circular.
+enum class MidiFallbackMode
+{
+    scaleQuantize, // default: behaves exactly as if MIDI targeting didn't exist
+    holdLastNote,  // keep correcting to the last-held note after release
+    bypass,        // pass audio through with no correction
+    silence        // mute output (via a short anti-click gain ramp, not a hard cut)
+};
+
 struct CorrectionResult
 {
     std::vector<float> samples;
@@ -79,6 +96,14 @@ public:
     void setCorrectionAmount (float amount) noexcept { correctionAmount = juce::jlimit (correctionAmountMin, correctionAmountMax, amount); }
     void setRetuneSpeedMs (float speedMs) noexcept { retuneSpeedMs = juce::jlimit (retuneSpeedMsMin, retuneSpeedMsMax, speedMs); }
 
+    /// Monophonic MIDI vocoder mode (docs/ROADMAP.md Phase 5) — see
+    /// MidiFallbackMode's doc for what `midiFallbackMode` controls.
+    /// `noteNumber` is clamped to a valid MIDI note or -1 ("none held"),
+    /// same "validate at the boundary you own" convention as the setters
+    /// above.
+    void setMidiTargetNote (int noteNumber) noexcept { midiTargetNote = (noteNumber >= 0 && noteNumber <= 127) ? noteNumber : -1; }
+    void setMidiFallbackMode (MidiFallbackMode mode) noexcept { midiFallbackMode = mode; }
+
     /// `samples.size()` must equal the `blockSize` passed to the constructor.
     [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate);
 
@@ -103,6 +128,15 @@ private:
     // rather than uninitialized/NaN so the very first block glides from
     // "no correction" rather than an undefined value.
     float previousAppliedShift = 0.0f;
+
+    int midiTargetNote = -1;                                    // -1 = no MIDI note currently held
+    MidiFallbackMode midiFallbackMode = MidiFallbackMode::scaleQuantize;
+    int lastKnownMidiNote = -1;                                 // for holdLastNote; -1 until a note has ever been held
+    // Anti-click gain for the "silence" fallback mode — ramped per sample
+    // toward 0 (muted) or 1 (audible) rather than cut, see
+    // RetuneSmoothing.h's silenceRampMs doc for why. Starts at 1 (audible)
+    // since the plugin shouldn't start muted before any MIDI has arrived.
+    float silenceGain = 1.0f;
 
     // Controls the phase vocoder's STFT hop size (step = frameSize /
     // overSampling), not the analysis window itself — affects

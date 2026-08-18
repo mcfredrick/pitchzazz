@@ -29,12 +29,32 @@ CorrectionResult PSOLACorrector::process (const std::vector<float>& samples, dou
     result.timings.detectUs = microsSince (detectStart);
 
     const auto quantizeStart = std::chrono::steady_clock::now();
+    // See Corrector::process()'s equivalent block for the full reasoning.
+    const bool midiNoteHeld = midiTargetNote >= 0;
+    if (midiNoteHeld)
+        lastKnownMidiNote = midiTargetNote;
+
     float semitoneShift = 0.0f;
     if (pitch.frequencyHz > 0.0f)
     {
         const float currentNote = hzToMidi (pitch.frequencyHz);
-        const int targetNote = nearestInScaleMidi ((int) std::round (currentNote), scale);
-        semitoneShift = (float) targetNote - currentNote;
+        if (midiNoteHeld)
+        {
+            semitoneShift = (float) midiTargetNote - currentNote;
+        }
+        else if (midiFallbackMode == MidiFallbackMode::holdLastNote && lastKnownMidiNote >= 0)
+        {
+            semitoneShift = (float) lastKnownMidiNote - currentNote;
+        }
+        else if (midiFallbackMode == MidiFallbackMode::bypass || midiFallbackMode == MidiFallbackMode::silence)
+        {
+            semitoneShift = 0.0f;
+        }
+        else
+        {
+            const int targetNote = nearestInScaleMidi ((int) std::round (currentNote), scale);
+            semitoneShift = (float) targetNote - currentNote;
+        }
         if (! std::isfinite (semitoneShift))
             semitoneShift = 0.0f;
     }
@@ -52,6 +72,16 @@ CorrectionResult PSOLACorrector::process (const std::vector<float>& samples, dou
     result.samples.assign (samples.size(), 0.0f);
     shifter.shiftPitch (pitch.frequencyHz, appliedShift, samples, result.samples);
     result.timings.shiftUs = microsSince (shiftStart);
+
+    // See Corrector::process()'s equivalent block for the full reasoning.
+    const bool shouldBeSilent = (midiFallbackMode == MidiFallbackMode::silence) && ! midiNoteHeld;
+    const float silenceTargetGain = shouldBeSilent ? 0.0f : 1.0f;
+    const float samplePeriodMs = 1000.0f / (float) sampleRate;
+    for (float& sample : result.samples)
+    {
+        silenceGain = glideTowards (silenceGain, silenceTargetGain, silenceRampMs, samplePeriodMs);
+        sample *= silenceGain;
+    }
 
     result.detectedHz = pitch.frequencyHz;
     result.detectedClarity = pitch.clarity;

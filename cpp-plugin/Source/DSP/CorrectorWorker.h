@@ -98,6 +98,18 @@ public:
     void setGrainWidthMultiplier (float multiplier) noexcept;
     bool getActiveSupportsGrainWidthControl() const noexcept;
 
+    /// Monophonic MIDI vocoder mode (docs/ROADMAP.md Phase 5) — same
+    /// relaxed-atomic forwarding and eventual-consistency contract as the
+    /// controls above. `setMidiTargetNote` is unusual among this class's
+    /// setters in one respect: it's called from `PluginProcessor::
+    /// processBlock` itself (the audio thread), not the message thread,
+    /// since that's where JUCE delivers MIDI — the mechanism doesn't care
+    /// which thread writes a relaxed atomic, but it's worth noting as the
+    /// first setter on this class with that origin.
+    void setMidiTargetNote (int noteNumber) noexcept;
+    void setMidiFallbackMode (MidiFallbackMode mode) noexcept;
+    bool getActiveSupportsMidiTargeting() const noexcept;
+
     /// Hands off a new engine for the worker to switch to. `newEngine`
     /// must already be fully constructed (see class doc for why) and
     /// built with the same `blockSize` this worker was constructed with.
@@ -171,6 +183,8 @@ private:
     // its doc for why that's the natural default rather than an edge of
     // the range.
     std::atomic<float> pendingGrainWidthMultiplier { 1.0f };
+    std::atomic<int> pendingMidiTargetNote { -1 };
+    std::atomic<MidiFallbackMode> pendingMidiFallbackMode { MidiFallbackMode::scaleQuantize };
 
     // Ownership handoff for the pending engine swap: the message thread
     // releases a unique_ptr into this raw pointer (std::atomic<T*> has no
@@ -181,6 +195,7 @@ private:
     std::atomic<const char*> activeEngineName { nullptr };
     std::atomic<bool> activeSupportsRetuneControls { false };
     std::atomic<bool> activeSupportsGrainWidthControl { false };
+    std::atomic<bool> activeSupportsMidiTargeting { false };
     std::atomic<int> activeLatencySamples { 0 };
     std::atomic<double> lastDetectUs { 0.0 };
     std::atomic<double> lastQuantizeUs { 0.0 };
