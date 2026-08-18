@@ -84,6 +84,14 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     correctedPitchDisplay.setAccentColour (juce::Colour (pitchzazz::colours::accentGreen));
     addAndMakeVisible (correctedPitchDisplay);
 
+    // Cyan to match the DETECTED box's own accent (this meter is reading
+    // the fine-grained detail behind that box's note name), green for the
+    // in-tune band — reusing the same "engaged/good" green the bypass LED
+    // and CORRECTED box already use elsewhere in this editor.
+    detectedCentsMeter.setAccentColour (juce::Colour (pitchzazz::colours::accentCyan));
+    detectedCentsMeter.setInTuneColour (juce::Colour (pitchzazz::colours::accentGreen));
+    addAndMakeVisible (detectedCentsMeter);
+
     bypassButton.setToggleState (processorRef.isBypassed(), juce::dontSendNotification);
     bypassButton.onClick = [this] { processorRef.setBypassed (bypassButton.getToggleState()); };
     addAndMakeVisible (bypassButton);
@@ -124,7 +132,7 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     addAndMakeVisible (shiftValueLabel);
     addAndMakeVisible (totalValueLabel);
 
-    setSize (320, 570);
+    setSize (320, 586);
 
     // 10Hz: fast enough to read as "live" for a demo, slow enough not to
     // burden the message thread — this is a UI poll, not audio-path code,
@@ -163,6 +171,7 @@ void PitchzazzAudioProcessorEditor::timerCallback()
         smoothedQuantizeUs = rawQuantizeUs;
         smoothedShiftUs = rawShiftUs;
         resetSmoothingOnNextTick = false;
+        centsWasVoiced = false; // force the cents meter to snap below instead of blending across the engine switch
     }
     else
     {
@@ -209,6 +218,21 @@ void PitchzazzAudioProcessorEditor::timerCallback()
         ? detectedHz * std::pow (2.0f, processorRef.getLastSemitoneShift() / 12.0f)
         : 0.0f;
     correctedPitchDisplay.setValueText (noteNameAndHz (correctedHz));
+
+    // Cents meter — EMA-smoothed (see the class doc for why this differs
+    // from the unsmoothed note-name text above), but only while voiced
+    // continuously: on voicing onset (silence -> a new note, or right
+    // after an engine switch, per resetSmoothingOnNextTick above) snap
+    // straight to the raw reading for one tick rather than blending from
+    // a stale previous value that belongs to a different note entirely.
+    const bool hasPitch = detectedHz > 0.0f;
+    if (hasPitch)
+    {
+        const float rawCents = pitchzazz::centsOffsetFromNearestNote (detectedHz);
+        smoothedCents = centsWasVoiced ? smoothedCents + emaAlpha * (rawCents - smoothedCents) : rawCents;
+    }
+    centsWasVoiced = hasPitch;
+    detectedCentsMeter.setCentsOffset (smoothedCents, hasPitch);
 }
 
 void PitchzazzAudioProcessorEditor::updateProcessorScale()
@@ -266,7 +290,14 @@ void PitchzazzAudioProcessorEditor::resized()
     pitchDisplayRow.removeFromLeft (8);
     correctedPitchDisplay.setBounds (pitchDisplayRow);
 
-    area.removeFromTop (16);
+    area.removeFromTop (4);
+    auto centsMeterRow = area.removeFromTop (16);
+    // Same left-half width as detectedPitchDisplay above — this meter is
+    // that box's own fine-grained reading, so it should visually belong
+    // to it rather than spanning the full row.
+    detectedCentsMeter.setBounds (centsMeterRow.removeFromLeft (centsMeterRow.getWidth() / 2 - 4));
+
+    area.removeFromTop (12);
     bypassButton.setBounds (area.removeFromTop (28));
 
     area.removeFromTop (20);

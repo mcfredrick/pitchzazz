@@ -14,6 +14,20 @@ float hzToMidi (float freqHz) noexcept;
 /// Inverse of hzToMidi.
 float midiToHz (float midi) noexcept;
 
+/// Signed cents offset of `freqHz` from the nearest chromatic
+/// (equal-tempered) MIDI note — always in [-50, +50] by construction of
+/// nearest-integer rounding, never a display clamp. Deliberately measured
+/// against the nearest *chromatic* note, not `Corrector::process()`'s
+/// scale-corrected target: that target can be several hundred cents away
+/// whenever the nearest chromatic note isn't in the active Scale
+/// (semitoneShift), which would make a "how in tune is the input" reading
+/// pin at an extreme for most out-of-scale content instead of showing
+/// genuine intonation. Lives alongside hzToMidi/midiToHz rather than in
+/// the GUI layer so it's covered by this crate's own unit tests instead
+/// of being untested GUI-only arithmetic — used by the editor's tuner-
+/// style cents meter (docs/ROADMAP.md Phase 5).
+float centsOffsetFromNearestNote (float freqHz) noexcept;
+
 /// Wall-clock cost of each stage of one Corrector::process() call, in
 /// microseconds. Mirrors pitch-core's StageTimings exactly — same field
 /// names, same shape — so the Phase 3 Rust-vs-C++ benchmark comparison
