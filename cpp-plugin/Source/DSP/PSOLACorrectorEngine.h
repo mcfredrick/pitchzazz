@@ -22,6 +22,8 @@ public:
     bool supportsRetuneControls() const noexcept override { return true; }
     void setCorrectionAmount (float amount) noexcept override { corrector.setCorrectionAmount (amount); }
     void setRetuneSpeedMs (float speedMs) noexcept override { corrector.setRetuneSpeedMs (speedMs); }
+    bool supportsGrainWidthControl() const noexcept override { return true; }
+    void setGrainWidthMultiplier (float multiplier) noexcept override { corrector.setGrainWidthMultiplier (multiplier); }
     [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate) override;
     [[nodiscard]] int getLatencySamples() const noexcept override { return corrector.getLatencySamples(); }
 

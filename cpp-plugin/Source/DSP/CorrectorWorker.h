@@ -89,6 +89,15 @@ public:
     /// eventual-consistency caveat as getActiveEngineName above.
     bool getActiveSupportsRetuneControls() const noexcept;
 
+    /// PSOLA-only "grain width" creative control (docs/ROADMAP.md Phase 5,
+    /// item 2) — same relaxed-atomic forwarding and eventual-consistency
+    /// contract as setCorrectionAmount/setRetuneSpeedMs above, just gated
+    /// on a different capability flag (getActiveSupportsGrainWidthControl)
+    /// since it's PSOLA-specific rather than shared with the native
+    /// phase-vocoder engine the way retune controls are.
+    void setGrainWidthMultiplier (float multiplier) noexcept;
+    bool getActiveSupportsGrainWidthControl() const noexcept;
+
     /// Hands off a new engine for the worker to switch to. `newEngine`
     /// must already be fully constructed (see class doc for why) and
     /// built with the same `blockSize` this worker was constructed with.
@@ -158,6 +167,10 @@ private:
     // baseline). Consistent with existing behavior, not a new gap.
     std::atomic<float> pendingCorrectionAmount { correctionAmountMax };
     std::atomic<float> pendingRetuneSpeedMs { retuneSpeedMsMin };
+    // 1.0 = PSOLAPitchShifter's own fixed-at-one-period default — see
+    // its doc for why that's the natural default rather than an edge of
+    // the range.
+    std::atomic<float> pendingGrainWidthMultiplier { 1.0f };
 
     // Ownership handoff for the pending engine swap: the message thread
     // releases a unique_ptr into this raw pointer (std::atomic<T*> has no
@@ -167,6 +180,7 @@ private:
     std::atomic<PitchEngine*> pendingEngine { nullptr };
     std::atomic<const char*> activeEngineName { nullptr };
     std::atomic<bool> activeSupportsRetuneControls { false };
+    std::atomic<bool> activeSupportsGrainWidthControl { false };
     std::atomic<int> activeLatencySamples { 0 };
     std::atomic<double> lastDetectUs { 0.0 };
     std::atomic<double> lastQuantizeUs { 0.0 };

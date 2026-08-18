@@ -145,20 +145,116 @@ TEST_CASE ("reported latency is pitch-independent, worst-case, and far below the
     PSOLAPitchShifter shifter (sampleRate);
 
     // Matches the derivation in PSOLAPitchShifter.h/.cpp exactly: 2 *
-    // ceil(sampleRate / minHz). Asserting the formula, not just "some
-    // small number," so a future change to minHz/the derivation itself
-    // has to consciously update this test rather than silently pass.
+    // ceil(sampleRate / minHz * grainWidthMultiplierMax) — the worst-case
+    // half-width across *both* the lowest detectable pitch and the widest
+    // the grain-width control (docs/ROADMAP.md Phase 5) can ever be set
+    // to, not just the pitch floor alone. Asserting the formula, not just
+    // "some small number," so a future change to minHz/grainWidthMultiplierMax/
+    // the derivation itself has to consciously update this test rather
+    // than silently pass.
     constexpr float minHz = 80.0f;
-    const int expectedLatency = 2 * (int) std::ceil (sampleRate / minHz);
+    const int maxPeriodSamples = (int) std::ceil (sampleRate / minHz);
+    const int maxHalfWidthSamples = (int) std::ceil ((double) maxPeriodSamples * (double) grainWidthMultiplierMax);
+    const int expectedLatency = 2 * maxHalfWidthSamples;
     CHECK (shifter.getLatencySamples() == expectedLatency);
 
     // The actual headline claim: at 44.1kHz the phase vocoder's window is
     // ~2048-2206 samples (docs/PERFORMANCE_LOG.md's measured-latency
     // entry). This is a *fixed* worst-case number, not an adaptive one —
-    // it does not get smaller for higher detected pitches at runtime (see
-    // getLatencySamples()'s doc for why: a host needs one constant value,
-    // not one that varies block to block).
+    // it does not get smaller for higher detected pitches (or a narrower
+    // grain-width setting) at runtime (see getLatencySamples()'s doc for
+    // why: a host needs one constant value, not one that varies block to
+    // block). grainWidthMultiplierMax (1.5x, not something more dramatic)
+    // was chosen specifically to keep this true even in the worst case —
+    // see that constant's own doc for the numbers behind the choice; an
+    // earlier attempt at 3.0x failed exactly this assertion (3312 samples,
+    // worse than the phase vocoder), which is what caught the problem
+    // before it shipped.
     CHECK (shifter.getLatencySamples() < 2048);
+}
+
+TEST_CASE ("grain-width multiplier is clamped to its documented range", "[psola-shifter]")
+{
+    constexpr double sampleRate = 44100.0;
+    PSOLAPitchShifter shifter (sampleRate);
+
+    // No public getter for the clamped value — exercised indirectly via
+    // getLatencySamples() staying constant (setGrainWidthMultiplier()
+    // never changes it, by design; see that method's doc) regardless of
+    // in-range or out-of-range input. This test is really about the clamp
+    // not throwing/asserting/crashing on an out-of-range value, which a
+    // caller (the UI's slider range technically already prevents, but
+    // PluginProcessor::setGrainWidthMultiplier's own clamp is the actual
+    // last line of defense) could still pass.
+    const int latencyBefore = shifter.getLatencySamples();
+    shifter.setGrainWidthMultiplier (grainWidthMultiplierMin - 10.0f); // deliberately out of range
+    CHECK (shifter.getLatencySamples() == latencyBefore);
+    shifter.setGrainWidthMultiplier (grainWidthMultiplierMax + 10.0f); // deliberately out of range
+    CHECK (shifter.getLatencySamples() == latencyBefore);
+}
+
+TEST_CASE ("grain-width multiplier of 1.0x reproduces the original fixed-width behaviour", "[psola-shifter]")
+{
+    // Regression guard: this is the actual claim made in
+    // docs/ROADMAP.md's dated entry for this feature — that adding the
+    // control doesn't change anything about the engine's existing,
+    // already-tested behaviour when left at its default. Compares two
+    // freshly-constructed shifters (one that never touches the new
+    // setter, one that explicitly sets 1.0x) against identical input,
+    // rather than comparing to a stored "golden" output, so this test
+    // fails if 1.0x and "never called" ever stop being equivalent.
+    constexpr double sampleRate = 44100.0;
+    constexpr int blockSize = 2048;
+    constexpr float freq = 220.0f;
+    constexpr float semitoneShift = 3.0f;
+
+    PSOLAPitchShifter defaultShifter (sampleRate);
+    PSOLAPitchShifter explicitShifter (sampleRate);
+    explicitShifter.setGrainWidthMultiplier (1.0f);
+
+    std::vector<float> defaultOutput, explicitOutput;
+    for (int block = 0; block < 4; ++block)
+    {
+        const auto input = sineBlock (freq, sampleRate, blockSize, block);
+        std::vector<float> out1 (blockSize, 0.0f), out2 (blockSize, 0.0f);
+        defaultShifter.shiftPitch (freq, semitoneShift, input, out1);
+        explicitShifter.shiftPitch (freq, semitoneShift, input, out2);
+        defaultOutput = out1;
+        explicitOutput = out2;
+    }
+
+    REQUIRE (defaultOutput.size() == explicitOutput.size());
+    for (size_t i = 0; i < defaultOutput.size(); ++i)
+        CHECK (defaultOutput[i] == explicitOutput[i]);
+}
+
+TEST_CASE ("a narrower grain still preserves signal energy within the existing loose bounds", "[psola-shifter]")
+{
+    // Same energy-sanity check as the very first test in this file, at
+    // the multiplier range's lower bound instead of the default — a
+    // narrower grain has less content to overlap-add, so this is worth
+    // checking separately rather than assuming the existing 1.0x-only
+    // energy test generalizes.
+    constexpr double sampleRate = 44100.0;
+    constexpr int blockSize = 2048;
+    constexpr float freq = 220.0f;
+
+    PSOLAPitchShifter shifter (sampleRate);
+    shifter.setGrainWidthMultiplier (grainWidthMultiplierMin);
+
+    std::vector<float> lastOutput;
+    for (int block = 0; block < 4; ++block)
+    {
+        const auto input = sineBlock (freq, sampleRate, blockSize, block);
+        std::vector<float> output (blockSize, 0.0f);
+        shifter.shiftPitch (freq, 0.0f, input, output);
+        lastOutput = output;
+    }
+
+    const float inputRms = 1.0f / std::sqrt (2.0f);
+    const float outputRms = rms (lastOutput);
+    CHECK (outputRms > inputRms * 0.3f);
+    CHECK (outputRms < inputRms * 3.0f);
 }
 
 // Deliberately NOT a test asserting the crackle/beat artifact from

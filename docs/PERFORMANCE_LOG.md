@@ -649,3 +649,69 @@ at both 44.1kHz and 48kHz (2 periods at `minHz=80`, confirmed exact via
 `benchmarks/PSOLALatencyProbe.cpp`), ~46% less than the phase vocoder's
 46.4ms at 44.1kHz and ~41% less than its 42.7ms at 48kHz — the `minHz`
 tightening's full gain, with none of it given back this time.
+
+---
+
+## 2026-08-18 — PSOLA grain-width control: worst-case latency cost of the range chosen
+
+Context: building the "grain width" creative control (`docs/ROADMAP.md`
+Phase 5's "Per-algorithm creative parameter exposure" item 2) — a
+multiplier on PSOLA's grain half-width, previously fixed at exactly one
+period. This entry exists because the control's upper bound turned out to
+be a *latency* decision, not just a musical one, and the first value tried
+was wrong in a way this project's own testing discipline caught before it
+shipped.
+
+**Mechanism:** `getLatencySamples()` must report one fixed constant a host
+can rely on — it can't vary with whatever the multiplier happens to be set
+to live. That means the constant has to be sized for the *worst case the
+multiplier could ever reach*, not the default. The existing formula
+(`latencySamples = 2 * maxPeriodSamples`, derived and verified exact in
+this log's TD-PSOLA entries above) generalizes to
+`latencySamples = 2 * ceil(maxPeriodSamples * grainWidthMultiplierMax)` —
+at the multiplier's default (1.0x) this reduces to exactly the old formula
+for the DSP *output*, but the *reported latency* is now always the
+worst-case number regardless of what the multiplier is actually set to.
+
+**Data — first attempt, `grainWidthMultiplierMax = 3.0`:**
+
+| Sample rate | Worst-case latency (3.0x ceiling) | Phase vocoder (unchanged) |
+|---|---|---|
+| 44.1kHz | 3312 samples / 75.10ms | 46.4ms |
+| 48kHz | 3600 samples / 75.00ms | 42.7ms |
+
+Caught by `tests/DSP/PSOLAPitchShifterTests.cpp`'s pre-existing
+latency-formula test (`CHECK (shifter.getLatencySamples() < 2048)`) before
+this shipped — a 3.0x ceiling makes this engine's worst-case latency
+*worse* than the phase vocoder's, which would silently defeat the entire
+reason TD-PSOLA was built in the first place (the latency comparison,
+this file's earlier "TD-PSOLA engine" entry). Not a subtle bug — a naive
+"pick a musically wide range" instinct with no thought given to what the
+range does to the one number a host actually sees.
+
+**Data — recomputed, `grainWidthMultiplierMax = 1.5`:**
+
+| Sample rate | Worst-case latency (1.5x ceiling) | Phase vocoder (unchanged) | Reduction vs. phase vocoder |
+|---|---|---|---|
+| 44.1kHz | 1656 samples / 37.55ms | 46.4ms | ~19% |
+| 48kHz | 1800 samples / 37.50ms | 42.7ms | ~12% |
+
+**Conclusion:** 1.5x keeps a real, meaningful latency advantage — not
+coincidentally, almost exactly the same ~19%/~12% figures this log's
+"tighter floor" entry already reported and treated as a legitimate win
+after the cross-fade fix cost some latency back. The lower bound (0.5x)
+has no equivalent cost: narrowing the grain only ever *reduces* the worst
+case, so it was left as an ordinary musically-motivated choice with no
+latency derivation behind it. Chosen deliberately narrower than a first
+instinct (3.0x) would have picked, specifically to protect the property
+this engine exists to demonstrate.
+
+**Not yet done:** `benchmarks/PSOLALatencyProbe.cpp`'s onset probe
+predates this control and still asserts against the pre-multiplier
+formula's numbers — the 37.55/37.50ms figures above are derived
+analytically from the (already-verified-exact-at-1.0x) formula, not
+re-confirmed by the probe at the new worst case. Flagged as a follow-up,
+not treated as equivalent to having measured it — this codebase's own
+"measurement over argument where practical" standard, same caveat this
+log has used before when a derivation was solid but not yet independently
+re-verified after a formula change.

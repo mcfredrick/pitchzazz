@@ -63,6 +63,16 @@ public:
     virtual void setCorrectionAmount (float) noexcept {}
     virtual void setRetuneSpeedMs (float) noexcept {}
 
+    /// PSOLA-only "grain width" creative control (docs/ROADMAP.md Phase 5,
+    /// item 2) — same default-no-op, capability-gated shape as the retune
+    /// controls above, and for the same reason: only an engine built on
+    /// discrete grains has a "grain width" to control at all (the phase
+    /// vocoder and the Rust engine don't), so this stays opt-in per engine
+    /// rather than a universal knob that silently does nothing on most of
+    /// them.
+    virtual bool supportsGrainWidthControl() const noexcept { return false; }
+    virtual void setGrainWidthMultiplier (float) noexcept {}
+
     /// `samples.size()` must equal the `blockSize` passed to whichever
     /// factory function constructed this engine.
     [[nodiscard]] virtual CorrectionResult process (const std::vector<float>& samples, double sampleRate) = 0;

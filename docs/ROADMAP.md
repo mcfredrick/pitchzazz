@@ -598,17 +598,76 @@ silent permission denial (no crash, no error, no samples). See
      snap at speed 0, gradual convergence at speed > 0) — full suite now
      31 cases / 266 assertions, all passing. VST3 rebuilt and re-passes
      PluginVal at strictness 5.
-  2. **Internal DSP constants, lower creative value but cheaper to wire:**
-     `overSampling` (already scoped above, blocked on a listening test)
-     and, per-engine, whatever else is already a tunable-but-currently-
-     fixed number — e.g. PSOLA's grain width is currently locked to
-     exactly one period; loosening that to a multiplier would be a
-     genuine "grain size" creative control in the same spirit as a
-     granular synth's, at the cost of moving further from the formant-
-     preservation property that width is currently chosen for.
+  2. **Internal DSP constants, lower creative value but cheaper to wire —
+     grain width done, 2026-08-18; `overSampling` remains blocked on a
+     listening test.** PSOLA's grain half-width, previously locked to
+     exactly one period, is now a 0.5x-1.5x multiplier
+     (`PSOLAPitchShifter::setGrainWidthMultiplier`,
+     `grainWidthMultiplierMin`/`Max` in `PSOLAPitchShifter.h`) — a "Width"
+     slider in the GUI, disabled (not hidden) on any engine besides PSOLA
+     via a new `supportsGrainWidthControl()` capability flag on
+     `PitchEngine` (same default-no-op-virtual shape as the retune
+     controls above, so `NativeCorrectorEngine`/`RustCorrectorEngine`
+     needed zero changes). C++-only, matching PSOLA's own existing
+     precedent.
+
+     **The upper bound is not a free musical choice — it directly sets
+     this engine's fixed worst-case latency**, and that constraint changed
+     the shipped range: `getLatencySamples()` must report one constant
+     number sized to safely cover every value the multiplier could ever
+     be set to (`2 * ceil(maxPeriodSamples * grainWidthMultiplierMax)`,
+     generalizing the pre-existing `2 * maxPeriodSamples` formula from
+     "period" to "half-width"), not whatever it happens to be set to right
+     now. A first attempt at a 3.0x ceiling was caught by
+     `tests/DSP/PSOLAPitchShifterTests.cpp`'s existing latency-formula
+     test before it shipped: worst-case latency at 44.1/48kHz jumped to
+     3312/3600 samples (~75ms) — *worse* than the phase vocoder's
+     ~42.7-46.4ms, which would have silently defeated this entire engine's
+     reason for existing (docs/PERFORMANCE_LOG.md's SOTA-comparison
+     entry) the moment a user so much as saw the control, regardless of
+     what they set it to. Recomputed against 1.5x instead: 1656/1800
+     samples, ~37.5ms at both rates — still a real, meaningful win over
+     the phase vocoder (in the same ballpark as the ~19%/~12% net
+     reduction this project already accepted as legitimate after the
+     cross-fade fix cost latency back, per `docs/PERFORMANCE_LOG.md`'s
+     "tighter floor" entry), at the cost of a narrower creative range than
+     a first instinct might have picked. The lower bound (0.5x) has no
+     such constraint — narrowing the grain only ever *reduces* the worst
+     case — so it's the ordinary "no listening-test tooling to validate a
+     precise number" judgment call already used for `overSampling`/
+     `retuneSpeedMs` elsewhere in this codebase.
+
+     Also closed a latent (pre-existing, not introduced by this feature)
+     gap while in this class: `grainWindow`'s capacity is now reserved
+     once at construction to the worst case, so a grain-width change at
+     runtime — which can now need a bigger grain than pitch detection
+     alone ever demanded, even after this vector already "warmed up" at
+     the 1.0x default — can never trigger a reallocation on the worker
+     thread. Not itself an observed bug (nothing was seen to break), so
+     no `docs/FINDINGS.md` row — a proactive tightening of an existing
+     "shiftPitch() itself doesn't allocate" claim that this feature made
+     more likely to be tested.
+
+     Verified: 4 new test cases in `tests/DSP/PSOLAPitchShifterTests.cpp`
+     (the corrected latency formula; out-of-range clamping; 1.0x
+     reproduces the original fixed-width output exactly, sample-for-sample,
+     against a shifter that never calls the new setter at all; energy
+     bounds at the multiplier floor) — full suite now 35 cases / 2323
+     assertions (the per-sample equality check accounts for most of that
+     count), all passing, run headlessly via `cmake --build` + the `Tests`
+     binary directly (no Xcode GUI, no display in this environment). A
+     dated `docs/PERFORMANCE_LOG.md` entry has the full latency numbers,
+     per this codebase's rule 6 — this is a performance-relevant parameter
+     change, not just a feature addition. Not yet done:
+     `benchmarks/PSOLALatencyProbe.cpp`'s onset probe predates this
+     control and needs re-running against the new worst-case formula to
+     confirm the derivation is exact (not just internally consistent),
+     the same "measurement over argument" standard this project applies
+     elsewhere — flagged, not done in this pass.
   (1) done first, per this section's own original ordering call — it's the
   more recognizable, more requested category of control for this kind of
-  tool. (2) remains queued, not started.
+  tool. (2) is now also done (grain width; `overSampling` remains queued
+  behind the listening-test blocker).
 - **Latency improvement ideas, added 2026-08-17 — revisit after hot-swap
   is solid, not before.** Two directions identified while reviewing the
   measured-latency work (`docs/PERFORMANCE_LOG.md`'s "Measured pipeline
