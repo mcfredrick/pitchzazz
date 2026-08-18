@@ -536,6 +536,33 @@ silent permission denial (no crash, no error, no samples). See
   choosing a control's range (raw numeric knob vs. something like
   "Draft/Good/Best" tiers). Do the listening test before building the UI
   for this, not after.
+- **Per-algorithm creative parameter exposure, raised 2026-08-17, not
+  started.** Two different tiers, not equally valuable:
+  1. **The classic Auto-Tune controls, currently entirely absent — likely
+     the highest creative value of anything in this list.** This project
+     always applies an instant, full-strength snap to the nearest scale
+     note; there's no **correction amount** (blend between raw detected
+     pitch and the corrected target, 0-100%) and no **retune speed** (how
+     fast it glides to the target rather than snapping instantly — speed
+     0 is the classic hard-tune "T-Pain" robotic effect; a slower glide
+     is the subtle, natural-sounding end of the same control). Both are
+     musically central to what makes autotune a *creative* tool rather
+     than a correctness tool, and neither exists yet. Implementation
+     shape: `semitoneShift` in `Corrector`/`PSOLACorrector` would need
+     scaling by an amount parameter, and by a per-block-smoothed glide
+     toward the target instead of applying the full computed shift
+     immediately — touches the orchestration layer in both engines, not
+     just a single constant.
+  2. **Internal DSP constants, lower creative value but cheaper to wire:**
+     `overSampling` (already scoped above, blocked on a listening test)
+     and, per-engine, whatever else is already a tunable-but-currently-
+     fixed number — e.g. PSOLA's grain width is currently locked to
+     exactly one period; loosening that to a multiplier would be a
+     genuine "grain size" creative control in the same spirit as a
+     granular synth's, at the cost of moving further from the formant-
+     preservation property that width is currently chosen for.
+  Do (1) before (2) if only one gets built — it's the more recognizable,
+  more requested category of control for this kind of tool.
 - **Latency improvement ideas, added 2026-08-17 — revisit after hot-swap
   is solid, not before.** Two directions identified while reviewing the
   measured-latency work (`docs/PERFORMANCE_LOG.md`'s "Measured pipeline
