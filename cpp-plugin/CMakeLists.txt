@@ -397,6 +397,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     Source/DSP/PSOLACorrector.h
     Source/DSP/VarispeedResampler.cpp
     Source/DSP/VarispeedResampler.h
+    Source/DSP/WSOLATimeStretcher.cpp
+    Source/DSP/WSOLATimeStretcher.h
     Source/DSP/CorrectorWorker.cpp
     Source/DSP/CorrectorWorker.h
     Source/DSP/PitchEngine.h
