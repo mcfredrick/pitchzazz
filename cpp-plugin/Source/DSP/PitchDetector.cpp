@@ -47,9 +47,12 @@ namespace
     // never a meaningful peak) and discarding a trailing positive run
     // that reaches the end of the array without dipping negative first
     // (the original crate's comment: "the data was probably truncated").
-    std::vector<std::pair<size_t, float>> detectPeaks (const std::vector<float>& data)
+    // `peaks` is caller-owned scratch storage, cleared (not reallocated)
+    // on entry — capacity retained across calls so steady-state detect()
+    // calls never touch the heap here.
+    void detectPeaks (const std::vector<float>& data, std::vector<std::pair<size_t, float>>& peaks)
     {
-        std::vector<std::pair<size_t, float>> peaks;
+        peaks.clear();
         const size_t n = data.size();
         size_t idx = 0;
 
@@ -80,8 +83,6 @@ namespace
 
             peaks.emplace_back (maxIndex, maxValue);
         }
-
-        return peaks;
     }
 
     // Quadratic interpolation through (-1, y0), (0, y1), (1, y2). Returns
@@ -105,9 +106,11 @@ namespace
         return { xOffset + (float) idx, y };
     }
 
-    DetectedPitch pitchFromPeaks (const std::vector<float>& nsdf, double sampleRate, float clarityThreshold)
+    DetectedPitch pitchFromPeaks (const std::vector<float>& nsdf, double sampleRate, float clarityThreshold,
+                                   std::vector<std::pair<size_t, float>>& peakScratch)
     {
-        for (const auto& peak : detectPeaks (nsdf))
+        detectPeaks (nsdf, peakScratch);
+        for (const auto& peak : peakScratch)
         {
             if (peak.second > clarityThreshold)
             {
@@ -187,7 +190,7 @@ DetectedPitch PitchDetector::detect (const std::vector<float>& signal, double sa
 
     normalizedSquareDifference (signal);
 
-    return pitchFromPeaks (nsdf, sampleRate, clarityThreshold);
+    return pitchFromPeaks (nsdf, sampleRate, clarityThreshold, peakScratch);
 }
 
 } // namespace pitchzazz

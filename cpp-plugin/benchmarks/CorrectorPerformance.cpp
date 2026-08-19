@@ -43,10 +43,11 @@ TEST_CASE ("Corrector::process cost at 44100Hz", "[benchmark]")
 
     Corrector corrector (blockSize, sampleRate, 50, Scale { 0, ScaleMode::major });
     const auto signal = testTone (sampleRate, blockSize);
+    std::vector<float> output (blockSize);
 
     BENCHMARK ("process (44100Hz, block 2048)")
     {
-        return corrector.process (signal, sampleRate).semitoneShift;
+        return corrector.process (signal, sampleRate, output).semitoneShift;
     };
 }
 
@@ -58,10 +59,11 @@ TEST_CASE ("Corrector::process cost at 48000Hz", "[benchmark]")
 
     Corrector corrector (blockSize, sampleRate, 50, Scale { 0, ScaleMode::major });
     const auto signal = testTone (sampleRate, blockSize);
+    std::vector<float> output (blockSize);
 
     BENCHMARK ("process (48000Hz, block 2048)")
     {
-        return corrector.process (signal, sampleRate).semitoneShift;
+        return corrector.process (signal, sampleRate, output).semitoneShift;
     };
 }
 
@@ -73,9 +75,10 @@ TEST_CASE ("Corrector::process cost at 96000Hz", "[benchmark]")
 
     Corrector corrector (blockSize, sampleRate, 50, Scale { 0, ScaleMode::major });
     const auto signal = testTone (sampleRate, blockSize);
+    std::vector<float> output (blockSize);
 
     BENCHMARK ("process (96000Hz, block 2048)")
     {
-        return corrector.process (signal, sampleRate).semitoneShift;
+        return corrector.process (signal, sampleRate, output).semitoneShift;
     };
 }

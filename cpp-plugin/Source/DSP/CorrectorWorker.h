@@ -156,6 +156,19 @@ private:
     std::vector<float> analysisBuffer;
     int filled = 0;
 
+    // Output scratch for engine->process() — sized once here (constructor
+    // initializer list, same as analysisBuffer above) and reused every
+    // block rather than letting CorrectionResult own/return a freshly-
+    // allocated buffer each call (see PitchEngine::process's doc and
+    // docs/FINDINGS.md). engineOutput holds the active (or, during a
+    // crossfade, the outgoing) engine's output; crossfadeOutput holds the
+    // incoming engine's; blendedOutput holds the two blended together —
+    // three separate buffers because the crossfade branch below needs
+    // all three alive simultaneously.
+    std::vector<float> engineOutput;
+    std::vector<float> crossfadeOutput;
+    std::vector<float> blendedOutput;
+
     std::atomic<int> pendingTonicPitchClass;
     std::atomic<int> pendingMode;
     // Hardcoded to this project's original defaults rather than threaded

@@ -73,9 +73,16 @@ public:
     virtual bool supportsGrainWidthControl() const noexcept { return false; }
     virtual void setGrainWidthMultiplier (float) noexcept {}
 
-    /// `samples.size()` must equal the `blockSize` passed to whichever
-    /// factory function constructed this engine.
-    [[nodiscard]] virtual CorrectionResult process (const std::vector<float>& samples, double sampleRate) = 0;
+    /// `samples.size()` and `output.size()` must both equal the
+    /// `blockSize` passed to whichever factory function constructed this
+    /// engine. `output` is caller-owned scratch storage, written in
+    /// place rather than returned inside CorrectionResult — every
+    /// implementation of this interface is expected to treat it the same
+    /// way Corrector::process does (see its doc): reused across calls by
+    /// the caller, never resized/reallocated here, so a caller that keeps
+    /// a persistent buffer (like CorrectorWorker) gets zero per-block
+    /// heap allocation through this call.
+    [[nodiscard]] virtual CorrectionResult process (const std::vector<float>& samples, double sampleRate, std::vector<float>& output) = 0;
 
     /// This engine's algorithmic pipeline latency, in samples — for
     /// display and for AudioProcessor::setLatencySamples(), so the host's

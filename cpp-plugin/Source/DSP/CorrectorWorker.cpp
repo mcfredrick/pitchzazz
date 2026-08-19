@@ -17,6 +17,9 @@ CorrectorWorker::CorrectorWorker (int blockSizeIn, double sampleRateIn, std::uni
       outputFifo (outputFifoIn),
       outputBuffer (outputBufferIn),
       analysisBuffer ((size_t) blockSizeIn, 0.0f),
+      engineOutput ((size_t) blockSizeIn, 0.0f),
+      crossfadeOutput ((size_t) blockSizeIn, 0.0f),
+      blendedOutput ((size_t) blockSizeIn, 0.0f),
       pendingTonicPitchClass (0),
       pendingMode (static_cast<int> (ScaleMode::major))
 {
@@ -195,12 +198,11 @@ void CorrectorWorker::run()
             crossfadeEngine->setCorrectionAmount (correctionAmount);
             crossfadeEngine->setRetuneSpeedMs (retuneSpeedMs);
             crossfadeEngine->setGrainWidthMultiplier (grainWidthMultiplier);
-            const auto oldResult = engine->process (analysisBuffer, sampleRate);
-            const auto newResult = crossfadeEngine->process (analysisBuffer, sampleRate);
+            const auto oldResult = engine->process (analysisBuffer, sampleRate, engineOutput);
+            const auto newResult = crossfadeEngine->process (analysisBuffer, sampleRate, crossfadeOutput);
 
             const int totalCrossfadeSamples = blockSize * crossfadeBlocks;
             CorrectionResult blended;
-            blended.samples.resize ((size_t) blockSize);
             for (int i = 0; i < blockSize; ++i)
             {
                 const int globalIndex = crossfadeBlockIndex * blockSize + i;
@@ -218,7 +220,7 @@ void CorrectorWorker::run()
                 const float angle = t * juce::MathConstants<float>::halfPi;
                 const float gainOld = std::cos (angle);
                 const float gainNew = std::sin (angle);
-                blended.samples[(size_t) i] = oldResult.samples[(size_t) i] * gainOld + newResult.samples[(size_t) i] * gainNew;
+                blendedOutput[(size_t) i] = engineOutput[(size_t) i] * gainOld + crossfadeOutput[(size_t) i] * gainNew;
             }
             // Detection/timing info reported for this block reflects the
             // incoming engine, since that's what's active once the
@@ -234,7 +236,7 @@ void CorrectorWorker::run()
             lastDetectedHz.store (blended.detectedHz, std::memory_order_relaxed);
             lastSemitoneShift.store (blended.semitoneShift, std::memory_order_relaxed);
 
-            pushToOutputFifo (blended.samples, outputFifo, outputBuffer);
+            pushToOutputFifo (blendedOutput, outputFifo, outputBuffer);
 
             ++crossfadeBlockIndex;
             if (crossfadeBlockIndex >= crossfadeBlocks)
@@ -249,13 +251,13 @@ void CorrectorWorker::run()
         }
         else
         {
-            const auto result = engine->process (analysisBuffer, sampleRate);
+            const auto result = engine->process (analysisBuffer, sampleRate, engineOutput);
             lastDetectUs.store (result.timings.detectUs, std::memory_order_relaxed);
             lastQuantizeUs.store (result.timings.quantizeUs, std::memory_order_relaxed);
             lastShiftUs.store (result.timings.shiftUs, std::memory_order_relaxed);
             lastDetectedHz.store (result.detectedHz, std::memory_order_relaxed);
             lastSemitoneShift.store (result.semitoneShift, std::memory_order_relaxed);
-            pushToOutputFifo (result.samples, outputFifo, outputBuffer);
+            pushToOutputFifo (engineOutput, outputFifo, outputBuffer);
         }
 
         filled = 0;

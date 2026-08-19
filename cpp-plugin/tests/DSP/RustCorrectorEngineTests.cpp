@@ -23,9 +23,9 @@ TEST_CASE ("Rust engine detects a clean sine wave through the FFI bridge", "[rus
     for (int i = 0; i < blockSize; ++i)
         signal[(size_t) i] = std::sin (2.0f * juce::MathConstants<float>::pi * trueFreq * (float) i / (float) sampleRate);
 
-    const auto result = engine->process (signal, sampleRate);
+    std::vector<float> output ((size_t) blockSize);
+    const auto result = engine->process (signal, sampleRate, output);
 
-    CHECK (result.samples.size() == (size_t) blockSize);
     CHECK (result.detectedHz > 0.0f);
     CHECK (std::abs (result.detectedHz - trueFreq) < 2.0f); // same tolerance as the C++ engine's own test
     CHECK (result.detectedClarity > 0.9f);
@@ -39,7 +39,8 @@ TEST_CASE ("Rust engine silence produces no detected pitch through the FFI bridg
     REQUIRE (engine != nullptr);
 
     const std::vector<float> silence ((size_t) blockSize, 0.0f);
-    const auto result = engine->process (silence, 44100.0);
+    std::vector<float> output ((size_t) blockSize);
+    const auto result = engine->process (silence, 44100.0, output);
 
     CHECK (result.detectedHz == 0.0f);
     CHECK (result.semitoneShift == 0.0f);
