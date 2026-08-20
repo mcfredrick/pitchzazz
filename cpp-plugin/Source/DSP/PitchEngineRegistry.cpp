@@ -2,6 +2,7 @@
 #include "NativeCorrectorEngine.h"
 #include "PSOLACorrectorEngine.h"
 #include "RustCorrectorEngine.h"
+#include "VarispeedCorrectorEngine.h"
 
 namespace pitchzazz
 {
@@ -31,6 +32,14 @@ const std::vector<EngineDescriptor>& availableEngines()
             [] (const EngineConfig& config) -> std::unique_ptr<PitchEngine>
             {
                 return std::make_unique<PSOLACorrectorEngine> (config);
+            },
+        },
+        {
+            "varispeed-cpp",
+            "Varispeed + WSOLA",
+            [] (const EngineConfig& config) -> std::unique_ptr<PitchEngine>
+            {
+                return std::make_unique<VarispeedCorrectorEngine> (config);
             },
         },
     };

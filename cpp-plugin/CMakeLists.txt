@@ -399,6 +399,10 @@ target_sources(${PROJECT_NAME} PRIVATE
     Source/DSP/VarispeedResampler.h
     Source/DSP/WSOLATimeStretcher.cpp
     Source/DSP/WSOLATimeStretcher.h
+    Source/DSP/VarispeedShifter.cpp
+    Source/DSP/VarispeedShifter.h
+    Source/DSP/VarispeedCorrector.cpp
+    Source/DSP/VarispeedCorrector.h
     Source/DSP/CorrectorWorker.cpp
     Source/DSP/CorrectorWorker.h
     Source/DSP/PitchEngine.h
@@ -408,6 +412,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     Source/DSP/RustCorrectorEngine.h
     Source/DSP/PSOLACorrectorEngine.cpp
     Source/DSP/PSOLACorrectorEngine.h
+    Source/DSP/VarispeedCorrectorEngine.cpp
+    Source/DSP/VarispeedCorrectorEngine.h
     Source/DSP/PitchEngineRegistry.cpp
     Source/DSP/PitchEngineRegistry.h
 )
