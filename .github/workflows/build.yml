@@ -66,9 +66,16 @@ jobs:
     # all live under cpp-plugin/, not the repo root (see BUILD_DIR's
     # comment above for why this project's layout differs from the
     # template this workflow was copied from).
+    # Job-level `defaults.run` REPLACES the workflow-level one rather than
+    # merging with it — omitting `shell: bash` here silently dropped the
+    # workflow-level default and left Windows steps running bash syntax
+    # through PowerShell (a real CI failure, not a guess: "Missing type
+    # name after '['" — pwsh parsing `[ -f "$ENV_FILE" ]` as PowerShell
+    # array-type syntax).
     defaults:
       run:
         working-directory: cpp-plugin
+        shell: bash
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       mode: ${{ steps.set-mode.outputs.mode }}
@@ -174,10 +181,15 @@ jobs:
     # Same reasoning as detect_platforms above — the actual JUCE project
     # (.env, CMakeLists.txt, scripts/) lives under cpp-plugin/. BUILD_DIR
     # is absolute (see its definition) specifically so it doesn't also
-    # need adjusting here.
+    # need adjusting here. `shell: bash` re-specified alongside
+    # working-directory for the same reason as detect_platforms — this is
+    # the job that actually runs on Windows, where the real CI failure
+    # this comment refers to happened (job-level defaults.run replaces,
+    # not merges with, the workflow-level one).
     defaults:
       run:
         working-directory: cpp-plugin
+        shell: bash
 
     steps:
       # Checkout moved first (the reference template ran it after the
