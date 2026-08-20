@@ -4,8 +4,10 @@ Quick-reference for Q&A beyond what fits in the `<10min` code tour
 (`.tours/pitchzazz-walkthrough.tour`). Each section is a cheat sheet, not
 a narrative — for the full story (data, iteration, reverted attempts) see
 `docs/ARCHITECTURE.md`, `docs/COMPARISON.md`, `docs/PERFORMANCE_LOG.md`,
-and `docs/FINDINGS.md`, all linked inline below. Six mechanisms, matching
-tour stops 1, 3, 4, 7, 8, and 10.
+and `docs/FINDINGS.md`, all linked inline below. Seven mechanisms, six
+with tour stops (1, 3, 4, 7, 8, and 10) — section 7 (Varispeed + WSOLA)
+doesn't have one yet, tracked in `docs/ROADMAP.md`'s documentation
+follow-up note.
 
 ---
 
@@ -680,3 +682,184 @@ language itself.
   starting a *new* crossfade, so a rapid second request during an
   in-progress crossfade just waits rather than overlapping two crossfades
   at once (`CorrectorWorker.cpp:156-160`'s comment).
+
+---
+
+## 7. Varispeed + WSOLA pitch shifting
+
+`VarispeedShifter::shiftPitch`, `cpp-plugin/Source/DSP/VarispeedShifter.cpp:13-87`.
+Third algorithm family, deliberately time-domain and deliberately not a
+variant of the phase vocoder or TD-PSOLA — this project's explicit
+"playground for algorithm families" third entry
+(`docs/ROADMAP.md`/plan context). Not a novel technique: this is the
+standard textbook recipe for time-domain pitch shifting — time-scale
+modify by a ratio, then resample by the same ratio to undo the duration
+change (Müller, *Fundamentals of Music Processing*, the TSM-based
+pitch-shifting chapter; the open-source **SoundTouch** library is a
+concrete real-world implementation of the same WSOLA + resample
+composition). The two DSP stages themselves (`VarispeedResampler`,
+`WSOLATimeStretcher`) are built from scratch for this project, not
+wrapped from an existing library — the *composition pattern* is standard,
+the *code* isn't borrowed.
+
+**Two stages, in this specific order:**
+
+1. **`WSOLATimeStretcher`** (`WSOLATimeStretcher.cpp:14-202`) — time-
+   stretches the *original* signal by `ratio = 2^(semitoneShift/12)`,
+   pitch-preserving, duration-changing. Real WSOLA (Waveform Similarity
+   Overlap-Add), not fixed-hop overlap-add: ~25ms Hann windows at 50%
+   nominal overlap (`synthesisHopSamples = windowSizeSamples/2`,
+   `WSOLATimeStretcher.cpp:20`), with each analysis window's exact read
+   position nudged by up to `searchRadiusSamples` (window/16,
+   `WSOLATimeStretcher.cpp:21`) to whichever nearby offset best
+   normalized-cross-correlates against the tail of the previously placed
+   window (`searchBestOffset`, `WSOLATimeStretcher.cpp:55-136`) — this
+   search is WSOLA's entire reason to exist over naive fixed-hop OLA, and
+   also its main failure mode (see below). Correlation length is capped
+   to a fixed 256-sample constant independent of sample rate
+   (`WSOLATimeStretcher.h:150`), not the full overlap region — see the
+   O(sampleRate²) bug below for why that matters.
+2. **`VarispeedResampler`** (`VarispeedResampler.cpp:23-80`) — reads the
+   stretched signal back at `ratio` via cubic Hermite (Catmull-Rom)
+   interpolation (`catmullRom`, `VarispeedResampler.cpp:13-20`), which
+   both restores the original duration *and* is the actual pitch-shift
+   mechanism: playing content back at a different rate shifts the entire
+   spectrum uniformly, formants included — the same physical effect as
+   nudging a turntable's pitch fader or varispeed-ing a tape reel. This
+   formant shift is the deliberate creative differentiator from the other
+   two engines (both of which decouple pitch from spectral envelope on
+   purpose), not a defect (`VarispeedResampler.h:8-16`).
+
+**Why this order and not the reverse** (`VarispeedShifter.h:34-45`):
+resampling first would mean WSOLA operates on an already time-compressed-
+or-expanded signal, so its own fixed-*sample* lookahead would translate
+into a *ratio-scaled* amount of real-world latency — worse the further
+you shift, unbounded in the worst case. Stretching the original signal
+first keeps WSOLA's lookahead exactly what `getLatencySamples()` already
+documents: fixed, sample-rate-derived, ratio-independent. The tape/vinyl
+character survives either ordering (resampling is still the last op
+either way) — only the latency story changes, which is why this was worth
+deciding deliberately rather than picking arbitrarily.
+
+**Latency accounting** (`VarispeedShifter::getLatencySamples`,
+`VarispeedShifter.h:72-75`): sum of both stages' own fixed latencies —
+`WSOLATimeStretcher::getLatencySamples() = windowSizeSamples +
+searchRadiusSamples` (`WSOLATimeStretcher.h:131`, ≈26.6ms @44.1kHz after
+the radius reduction below) plus `VarispeedResampler::getLatencySamples()
+= 2` (the cubic kernel's fixed 4-tap width, `VarispeedResampler.h:82`,
+negligible). Neither term depends on `semitoneShift` — the entire point
+of the ordering decision above. `varispeedMaxAbsSemitoneShift = ±24`
+semitones (`VarispeedShifter.h:21`) is a **buffer-margin safety clamp,
+not a latency bound** — unlike PSOLA's `minHz`/`maxHz`, which doubles as
+both; Varispeed's two stages have no natural pitch-range clamp to borrow
+one from, so this exists purely to keep `VarispeedResampler`'s/
+`WSOLATimeStretcher`'s fixed-capacity scratch buffers within a sane
+worst-case ratio.
+
+**The click-suppression fade** (`VarispeedShifter.cpp:43-86`): unlike
+`PitchShifter`/`PSOLAPitchShifter`, whose windowed synthesis already
+tapers to near-zero at grain/frame edges for free, this pipeline's raw
+resampled output has no such taper — a hard cut from real audio to
+zero-fill silence during the pipeline's own warm-up produced an
+audible-scale click (caught by `VarispeedShifterTests.cpp`'s dedicated
+cold-start discontinuity test, `maxAdjacentDelta < 0.1f` across 10 blocks
+from construction). A **reactive** gain ramp alone can't fix it — by the
+time enough consecutive real samples exist for the ramp to settle near
+1.0, it's *already* at full gain with no warning before the known
+silence boundary. The fix is anticipatory: `produced` (how many real
+samples this call actually has) is known before the output loop runs, so
+the fade toward silence is computed *backward* from that known boundary
+(`fadeOutSamples = 128` ≈ 2.9ms, `VarispeedShifter.cpp:64-65`) rather
+than reacted to after crossing it.
+
+**The correlation-search degenerate-match bug — found, then found to be
+under-fixed, then actually fixed** (`docs/FINDINGS.md` #23, #24 — the
+second entry explicitly supersedes the first, read both for the full
+arc): on stationary/periodic material, the *objectively best* match
+anywhere in the search window is trivially "match the reference at
+near-zero lag" — which corresponds to advancing at the fixed
+`synthesisHopSamples` rate instead of the intended ratio-scaled hop, i.e.
+the search has every incentive to quietly stop stretching. Confirmed by
+direct offset-logging instrumentation on a sustained 220Hz tone: read
+position drifted by exactly `synthesisHopSamples` every hop until the
+search radius was exhausted, forcing an abrupt corrective jump every 9-13
+hops (6-9Hz) — audible as a periodic discontinuity, reported by ear as
+sounding similar to PSOLA's own crackle/beat artifact.
+  - *First fix attempt (finding #23):* a small penalty proportional to
+    distance from the nominal (target) offset, plus reducing
+    `searchRadiusSamples` from window/4 to window/16. This measurably
+    changed the artifact but didn't remove it — the penalty is negligible
+    right near offset 0, exactly where the degenerate preference
+    originates, so the cycle just got *smaller and faster* (9-13 hops
+    down to ~5), which is perceptually worse: a fast small-amplitude
+    correction fuses into continuous buzz/roughness rather than discrete
+    clicks. User-reported as "sounds like I'm listening through a fan"
+    after this fix shipped — a real example of a fix that looked like
+    progress on paper (smaller jumps) while making the perceived quality
+    worse.
+  - *Actual fix (finding #24):* replaced the proportional penalty with a
+    **hard minimum-improvement threshold** in `searchBestOffset`
+    (`WSOLATimeStretcher.cpp:92-134`) — the nominal position's own
+    correlation score becomes the baseline, and any other offset must
+    beat it by a fixed margin (`minImprovementToDeviate = 0.02`) to be
+    chosen at all. Nominal wins every tie and near-tie outright, rather
+    than merely being *cheaper* to deviate from. Verified by extending the
+    same instrumentation across ±0.5 to ±12 semitones: chosen offset
+    settles to a stable constant per shift amount (never oscillates), zero
+    output discontinuities (`delta > 0.15`) over 122,880 samples per case.
+  - *Disclosed limitation, same standard as PSOLA's own crackle/beat
+    (`docs/FINDINGS.md` #16/#17):* this is confirmed only against a
+    stationary test tone, close to the worst case for any correlation
+    search. Real voiced material's natural jitter/harmonic content should
+    behave at least as well, but isn't separately measured. A more
+    complete fix would track phase continuity explicitly rather than
+    gate on a single fixed correlation margin — bigger scope, not
+    attempted.
+
+**The O(sampleRate²) search-cost bug** (`docs/FINDINGS.md` #22): an
+earlier version correlated the *entire* `synthesisHopSamples`-length
+overlap region rather than a fixed-length snippet; since both search
+radius and correlation length scaled with `windowSizeSamples` (itself
+sample-rate-derived), total search cost scaled as O(sampleRate²), not
+O(sampleRate) — invisible at 44.1kHz, but measured live at 96kHz pushing
+the shift stage to ~26ms against a ~21ms budget (a real, audible buffer
+underrun). Fixed by capping correlation length to a fixed
+`maxCorrelationLengthSamples = 256` constant (`WSOLATimeStretcher.h:150`),
+independent of sample rate — a short reference snippet is sufficient to
+find a good splice offset; it doesn't need to cover the entire overlap
+region.
+
+**Likely questions:**
+- *Is "Varispeed" the right name if it doesn't actually change tempo with
+  pitch the way real tape varispeed does?* The name is accurate to the
+  *mechanism and sonic character* (the pitch shift genuinely comes from
+  variable-rate resampling, the real varispeed technique, and that's
+  exactly why formants shift along with it) but not to traditional tape
+  behavior, where duration and pitch are tied together — WSOLA
+  deliberately cancels that tie so this engine's output stays
+  block-accurate like the other two. Named "Varispeed + WSOLA" in the UI
+  specifically to credit both halves rather than imply either alone.
+- *Why build WSOLA and the resampler from scratch instead of using
+  SoundTouch or a similar existing library?* Consistent with this
+  project's whole ethos — every DSP mechanism here (phase vocoder,
+  TD-PSOLA, now WSOLA) is built and explained from first principles, not
+  wrapped, because the demonstration is the *engineering*, not the
+  end-user feature.
+- *Why does a "fix" that measurably shrinks the artifact (finding #23)
+  not count as done?* Because the metric that was improving (jump size,
+  jump frequency) wasn't the metric that mattered (perceived smoothness)
+  — the same "automated/proxy metric passing ≠ perceptual quality" lesson
+  this project already logged for the hot-swap crossfade (finding #11)
+  and PSOLA's crossfade revert (finding #20). Real listening caught what
+  the instrumented sine-tone jump-count alone would have called a clear
+  improvement.
+- *Could the same minimum-improvement-threshold idea fix PSOLA's own
+  crackle/beat artifact?* Not directly — PSOLA doesn't have a correlation
+  search to bias in the first place; `placeGrainAt` deterministically
+  snaps to a floor-quantized analysis bucket
+  (`PSOLAPitchShifter.cpp:130`). The *principle* (anchor to nominal,
+  require a substantial margin to deviate) could motivate adding a
+  bounded local search to PSOLA's placement — which is exactly the
+  "correlation-based grain alignment" finding #20 already flagged as the
+  not-yet-attempted real fix — but that's new scope, not a parameter
+  port. Marked as a follow-up, not started.
