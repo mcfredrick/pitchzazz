@@ -380,15 +380,18 @@ jobs:
 
       # ── Test ──────────────────────────────────────────────────────
       # BUILD_DIR mixes backslashes (from github.workspace, native on
-      # Windows) with forward slashes (the /cpp-plugin/build suffix). cmake
-      # and ctest tolerate that fine as a string argument, but a step's
-      # YAML-level `working-directory:` field is handed straight to the
-      # runner's process launcher, which doesn't — real CI failure: "An
-      # error occurred trying to start process ... The directory name is
-      # invalid." `cd` from inside the bash script instead — bash's own
-      # path resolution (MSYS on Windows) tolerates the mixed separators.
+      # Windows) with forward slashes (the /cpp-plugin/build suffix).
+      # Passing it as a plain CLI argument is fine — cmake -B/--build
+      # already do exactly that successfully above — but any
+      # directory-changing use of it breaks: a YAML-level
+      # `working-directory:` field goes straight to the runner's process
+      # launcher ("The directory name is invalid"), and bash's own `cd`
+      # doesn't auto-translate the backslash half either (only "No such
+      # file or directory" — different failure, same root cause). ctest's
+      # --test-dir takes BUILD_DIR the same way cmake does: as a string
+      # argument, never a cd target.
       - name: Run Catch2 Tests
-        run: cd "${{ env.BUILD_DIR }}" && ctest --verbose --output-on-failure
+        run: ctest --test-dir "${{ env.BUILD_DIR }}" --verbose --output-on-failure
 
       - name: Download PluginVal
         run: |
