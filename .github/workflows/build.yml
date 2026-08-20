@@ -206,6 +206,18 @@ jobs:
 
       - uses: ilammy/msvc-dev-cmd@v1
 
+      # Git for Windows ships its own usr/bin/link.exe (a POSIX `link()`
+      # wrapper), and it sits ahead of MSVC's link.exe on PATH once the
+      # shell is bash — so rustc's `-C linker=link.exe` resolves to Git's
+      # binary, which chokes on MSVC-style linker args ("extra operand").
+      # Real CI failure: "note: /usr/bin/link: extra operand ...". Removing
+      # it lets PATH resolution fall through to the MSVC linker that
+      # msvc-dev-cmd just put on PATH above. Well-known Rust+MSVC+Git-Bash
+      # interaction, not specific to this project.
+      - name: Remove Git's link.exe (Windows) — shadows MSVC's linker
+        if: runner.os == 'Windows'
+        run: rm -f "/c/Program Files/Git/usr/bin/link.exe"
+
       - name: Set up Clang (Linux)
         if: runner.os == 'Linux'
         uses: egor-tensin/setup-clang@v1
