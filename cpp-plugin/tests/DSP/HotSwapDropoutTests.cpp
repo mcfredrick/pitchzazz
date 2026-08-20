@@ -160,3 +160,62 @@ TEST_CASE ("Hot-swap: no unexplained silence beyond startup latency", "[hotswap]
     INFO ("max consecutive near-silent samples after startup: " << maxConsecutiveSilent);
     CHECK (maxConsecutiveSilent < blockSize / 4);
 }
+
+// Varispeed is built from two independently-buffered variable-rate stages
+// (WSOLA then resample — see VarispeedShifter.h), a more elaborate
+// internal FIFO shape than either existing engine's single-stage
+// buffering, so its hot-swap behavior isn't assumed to be covered by the
+// native-cpp/rust-ffi cases above just because the mechanism looks
+// similar on paper — verified explicitly, both directions.
+
+TEST_CASE ("Hot-swap: sample accounting is exact when swapping into Varispeed", "[hotswap]")
+{
+    const auto output = runPipeline ("native-cpp", "varispeed-cpp");
+    CHECK (output.size() == (size_t) (blockSize * numBlocks));
+}
+
+TEST_CASE ("Hot-swap: sample accounting is exact when swapping out of Varispeed", "[hotswap]")
+{
+    const auto output = runPipeline ("varispeed-cpp", "native-cpp");
+    CHECK (output.size() == (size_t) (blockSize * numBlocks));
+}
+
+TEST_CASE ("Hot-swap: no discontinuity beyond baseline when swapping into Varispeed", "[hotswap]")
+{
+    const auto baseline = runPipeline ("native-cpp", "");
+    const auto swapped = runPipeline ("native-cpp", "varispeed-cpp");
+
+    const float baselineMaxDelta = maxAdjacentDelta (baseline);
+    const float swappedMaxDelta = maxAdjacentDelta (swapped);
+
+    INFO ("baseline max adjacent-sample delta: " << baselineMaxDelta);
+    INFO ("swapped max adjacent-sample delta: " << swappedMaxDelta);
+
+    CHECK (swappedMaxDelta < baselineMaxDelta * 4.0f + 0.05f);
+}
+
+TEST_CASE ("Hot-swap: no unexplained silence beyond startup latency when swapping into Varispeed", "[hotswap]")
+{
+    const auto output = runPipeline ("native-cpp", "varispeed-cpp");
+
+    // Varispeed's own reported latency (~31ms) is higher than a single
+    // block accumulation delay but still comfortably under one block at
+    // this test's sample rate/block size (~46.4ms/block) — same startup
+    // skip window as the other engines' equivalent test, not widened,
+    // specifically so a latency regression that ate into that margin
+    // would show up as a failure here rather than being silently
+    // accommodated.
+    const size_t startupSamples = (size_t) blockSize;
+    int consecutiveSilent = 0;
+    int maxConsecutiveSilent = 0;
+    for (size_t i = startupSamples; i < output.size(); ++i)
+    {
+        if (std::abs (output[i]) < 1e-6f)
+            maxConsecutiveSilent = std::max (maxConsecutiveSilent, ++consecutiveSilent);
+        else
+            consecutiveSilent = 0;
+    }
+
+    INFO ("max consecutive near-silent samples after startup: " << maxConsecutiveSilent);
+    CHECK (maxConsecutiveSilent < blockSize / 4);
+}
