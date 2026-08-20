@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 300" role="img" aria-label="Pitch detection: a windowed block is autocorrelated via FFT, normalized into the NSDF curve, then the first peak past the trivial zero-lag peak that clears a clarity threshold is refined by quadratic interpolation into a sub-sample period and converted to a frequency.">
+  <title>McLeod / MPM pitch detection: NSDF peak-picking</title>
+  <defs>
+    <marker id="pdArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a8d9c"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1180" height="300" fill="#12141a"/>
+
+  <rect x="20" y="30" width="230" height="70" rx="10" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="135" y="60" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#f1f1f6">windowed signal</text>
+  <text x="135" y="78" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">one BLOCK_SIZE frame</text>
+
+  <rect x="290" y="30" width="270" height="70" rx="10" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="425" y="60" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#f1f1f6">autocorrelation via FFT</text>
+  <text x="425" y="78" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">Wiener&#8211;Khinchin: |X(f)|&#178; &#8594; IFFT</text>
+
+  <rect x="600" y="30" width="260" height="70" rx="10" fill="#1b1e27" stroke="#00e5ff" stroke-width="2"/>
+  <text x="730" y="60" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#00e5ff">NSDF(&#964;) = 2·acf(&#964;) / m(&#964;)</text>
+  <text x="730" y="78" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">energy-normalized, bounded curve</text>
+
+  <rect x="900" y="30" width="260" height="70" rx="10" fill="#1b1e27" stroke="#00e5ff" stroke-width="2"/>
+  <text x="1030" y="60" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#00e5ff">peak-pick + quad. interp</text>
+  <text x="1030" y="78" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">clarity threshold &#8594; f0 = sr / &#964;</text>
+
+  <line x1="250" y1="65" x2="286" y2="65" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#pdArrow)"/>
+  <line x1="560" y1="65" x2="596" y2="65" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#pdArrow)"/>
+  <line x1="860" y1="65" x2="896" y2="65" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#pdArrow)"/>
+
+  <!-- illustrative NSDF curve -->
+  <rect x="20" y="130" width="1140" height="150" rx="10" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="40" y="150" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">NSDF(&#964;), illustrative &#8212; lag &#964; increases &#8594;</text>
+
+  <line x1="60" y1="245" x2="1120" y2="245" stroke="#2c3140" stroke-width="1.2"/>
+  <line x1="60" y1="185" x2="1120" y2="185" stroke="#8a8d9c" stroke-width="1" stroke-dasharray="4 4"/>
+  <text x="1122" y="189" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">clarity threshold</text>
+
+  <polyline points="70,178 140,250 230,205 310,250 400,158 480,240 560,215 640,242 720,235 820,240 920,242 1020,244 1100,245"
+            fill="none" stroke="#8a8d9c" stroke-width="1.6"/>
+
+  <circle cx="70" cy="178" r="5" fill="none" stroke="#8a8d9c" stroke-width="1.4" stroke-dasharray="2 2"/>
+  <text x="70" y="160" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">&#964;=0 self-corr &#8212; skipped</text>
+
+  <circle cx="230" cy="205" r="5" fill="none" stroke="#8a8d9c" stroke-width="1.4"/>
+  <text x="230" y="228" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">below threshold</text>
+
+  <circle cx="400" cy="158" r="6" fill="#00e5ff"/>
+  <text x="400" y="140" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" font-weight="600" fill="#00e5ff">first peak past threshold &#8594; refine &#8594; &#964;, f0</text>
+</svg>

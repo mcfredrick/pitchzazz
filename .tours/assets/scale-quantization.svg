@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 220" role="img" aria-label="A MIDI note's pitch class is checked against the scale directly. If it already belongs, it passes through unchanged. If not, the search checks one semitone below then one semitone above, increasing distance from 1 to 6, and returns the first pitch class that belongs to the scale.">
+  <title>Scale quantization: nearest-in-scale search</title>
+  <defs>
+    <marker id="sqArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a8d9c"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1180" height="220" fill="#12141a"/>
+
+  <rect x="20" y="95" width="140" height="50" rx="8" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="90" y="125" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#f1f1f6">MIDI note in</text>
+
+  <rect x="200" y="95" width="230" height="50" rx="8" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="315" y="125" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#f1f1f6">pitch class = note mod 12</text>
+
+  <polygon points="520,75 590,120 520,165 450,120" fill="#1b1e27" stroke="#ffb020" stroke-width="2"/>
+  <text x="520" y="124" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#ffb020">in scale?</text>
+
+  <rect x="650" y="15" width="260" height="55" rx="8" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="780" y="38" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#f1f1f6">unchanged</text>
+  <text x="780" y="55" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">already in scale</text>
+
+  <rect x="650" y="150" width="300" height="55" rx="8" fill="#1b1e27" stroke="#ffb020" stroke-width="2"/>
+  <text x="800" y="173" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#ffb020">search d = 1..6</text>
+  <text x="800" y="190" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">check note&#8722;d, then note+d</text>
+
+  <rect x="990" y="95" width="170" height="50" rx="8" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="1075" y="119" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" fill="#f1f1f6">nearest in-scale</text>
+  <text x="1075" y="134" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">note out</text>
+
+  <line x1="160" y1="120" x2="196" y2="120" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#sqArrow)"/>
+  <line x1="430" y1="120" x2="446" y2="120" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#sqArrow)"/>
+
+  <line x1="560" y1="100" x2="646" y2="45" stroke="#8a8d9c" stroke-width="1.4" marker-end="url(#sqArrow)"/>
+  <text x="610" y="65" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">yes</text>
+
+  <line x1="560" y1="140" x2="646" y2="178" stroke="#8a8d9c" stroke-width="1.4" marker-end="url(#sqArrow)"/>
+  <text x="610" y="168" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">no</text>
+
+  <line x1="910" y1="45" x2="986" y2="105" stroke="#8a8d9c" stroke-width="1.4" marker-end="url(#sqArrow)"/>
+  <line x1="950" y1="178" x2="986" y2="135" stroke="#8a8d9c" stroke-width="1.4" marker-end="url(#sqArrow)"/>
+</svg>

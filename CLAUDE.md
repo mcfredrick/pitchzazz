@@ -38,11 +38,18 @@ Weigh new work against that section before adding it to a phase.
   `noexcept`/`[[nodiscard]]` consistency), codified as durable rules in
   `cpp-plugin/CLAUDE.md`'s "C++ code quality standards" section so they
   don't regress. No correctness bugs found.
-- **Immediate next task** (`docs/ROADMAP.md`, "Presentation walkthrough
-  tooling"): the guided code-tour (CodeTour-style) through the 7 stops
-  that demonstrate real-time-audio-engineering depth — explicitly gated
-  on the best-practices audit landing first, which it now has. Not yet
-  started.
+- **Guided code-tour** (`docs/ROADMAP.md`, "Presentation walkthrough
+  tooling"): done — `.tours/pitchzazz-walkthrough.tour` has 12 stops,
+  C++-first (the original Rust prototype is now a short stop 2 detour),
+  covering real-time safety, pitch detection (MPM/NSDF), scale
+  quantization, block-size decoupling, the Phase 1 perf investigation,
+  all three pitch-shift engines individually (phase vocoder, TD-PSOLA,
+  Varispeed + WSOLA) plus a three-way comparison stop, the hot-swap
+  architecture, and the multi-validator coverage story. 8 of the 12
+  stops include a diagram. `docs/ALGORITHMS.md` mirrors this structure —
+  simplified plain-language explanations, diagrams, and an acronym
+  glossary at the top, layered on top of the existing deep Q&A
+  cheat-sheet content, not replacing it. Updated 2026-08-19.
 
 ## Rules to always follow in this codebase
 

@@ -1,50 +1,60 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 220" role="img" aria-label="Audio callbacks only push and pop a lock-free ring buffer; all detection, quantization, and shifting happens on a separate worker thread that is free to allocate.">
-  <title>Real-time-safe producer/consumer pipeline</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 300" role="img" aria-label="Mic feeds a real-time input callback, which pushes into a lock-free ring buffer; a worker thread with no deadline pops from it, runs detect, quantize, and shift in sequence, then pushes into a second ring buffer; a real-time output callback pops from that and drives the speakers.">
+  <title>Signal chain: two real-time callbacks, one worker thread, two lock-free ring buffers</title>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#1f2328"/>
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a8d9c"/>
     </marker>
   </defs>
-  <rect x="0" y="0" width="1000" height="220" fill="#f7f6f3"/>
+  <rect x="0" y="0" width="1180" height="300" fill="#12141a"/>
 
-  <!-- Input callback (audio thread) -->
-  <rect x="20" y="70" width="140" height="70" rx="8" fill="#ffffff" stroke="#c2410c" stroke-width="2.5"/>
-  <text x="90" y="98" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#1f2328">Input Callback</text>
-  <text x="90" y="116" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#c2410c">(audio thread)</text>
+  <!-- mic / speakers -->
+  <text x="40" y="150" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">mic</text>
+  <text x="1140" y="150" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">speakers</text>
 
-  <!-- Ring buffer A -->
-  <rect x="220" y="70" width="130" height="70" rx="8" fill="#ffffff" stroke="#1f2328" stroke-width="1.5"/>
-  <text x="285" y="98" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#1f2328">Ring Buffer</text>
-  <text x="285" y="116" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#555">(lock-free)</text>
+  <!-- input callback -->
+  <rect x="80" y="115" width="150" height="72" rx="10" fill="#1b1e27" stroke="#ff3fa4" stroke-width="2"/>
+  <text x="155" y="145" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12.5" font-weight="600" fill="#f1f1f6">Input Callback</text>
+  <text x="155" y="163" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#ff3fa4">audio thread</text>
+  <text x="155" y="177" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">no alloc · no lock</text>
 
-  <!-- Worker thread -->
-  <rect x="410" y="50" width="180" height="110" rx="8" fill="#ffffff" stroke="#1f2328" stroke-width="1.5"/>
-  <text x="500" y="98" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#1f2328">Worker Thread</text>
-  <text x="500" y="116" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#555">detect &#8594; quantize &#8594; shift</text>
-  <text x="500" y="132" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#555">(free to allocate)</text>
+  <!-- ring buffer A -->
+  <rect x="280" y="120" width="130" height="62" rx="10" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="345" y="147" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#f1f1f6">Ring Buffer</text>
+  <text x="345" y="163" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">lock-free (SPSC)</text>
 
-  <!-- Ring buffer B -->
-  <rect x="650" y="70" width="130" height="70" rx="8" fill="#ffffff" stroke="#1f2328" stroke-width="1.5"/>
-  <text x="715" y="98" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#1f2328">Ring Buffer</text>
-  <text x="715" y="116" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#555">(lock-free)</text>
+  <!-- worker thread group -->
+  <rect x="460" y="40" width="270" height="220" rx="12" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4" stroke-dasharray="3 4"/>
+  <text x="595" y="62" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" letter-spacing="0.06em" fill="#8a8d9c">WORKER THREAD · NO DEADLINE</text>
 
-  <!-- Output callback -->
-  <rect x="840" y="70" width="140" height="70" rx="8" fill="#ffffff" stroke="#c2410c" stroke-width="2.5"/>
-  <text x="910" y="98" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#1f2328">Output Callback</text>
-  <text x="910" y="116" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#c2410c">(audio thread)</text>
+  <rect x="480" y="80" width="230" height="46" rx="8" fill="#1b1e27" stroke="#00e5ff" stroke-width="1.8"/>
+  <text x="595" y="107" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#00e5ff">detect (McLeod / MPM)</text>
 
-  <!-- Arrows -->
-  <line x1="160" y1="105" x2="216" y2="105" stroke="#1f2328" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="188" y="93" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#1f2328">push_slice()</text>
-  <text x="188" y="128" text-anchor="middle" font-family="sans-serif" font-size="10" font-style="italic" fill="#c2410c">never blocks</text>
+  <rect x="480" y="138" width="230" height="46" rx="8" fill="#1b1e27" stroke="#ffb020" stroke-width="1.8"/>
+  <text x="595" y="165" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#ffb020">quantize (scale)</text>
 
-  <line x1="350" y1="105" x2="406" y2="105" stroke="#1f2328" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="378" y="93" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#1f2328">pop_slice()</text>
+  <rect x="480" y="196" width="230" height="46" rx="8" fill="#1b1e27" stroke="#39ff88" stroke-width="1.8"/>
+  <text x="595" y="223" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#39ff88">shift (engine)</text>
 
-  <line x1="590" y1="105" x2="646" y2="105" stroke="#1f2328" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="618" y="93" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#1f2328">push_slice()</text>
+  <!-- ring buffer B -->
+  <rect x="770" y="120" width="130" height="62" rx="10" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="835" y="147" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#f1f1f6">Ring Buffer</text>
+  <text x="835" y="163" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">lock-free (SPSC)</text>
 
-  <line x1="780" y1="105" x2="836" y2="105" stroke="#1f2328" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="808" y="93" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#1f2328">pop_slice()</text>
-  <text x="808" y="128" text-anchor="middle" font-family="sans-serif" font-size="10" font-style="italic" fill="#c2410c">never blocks</text>
+  <!-- output callback -->
+  <rect x="950" y="115" width="150" height="72" rx="10" fill="#1b1e27" stroke="#ff3fa4" stroke-width="2"/>
+  <text x="1025" y="145" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12.5" font-weight="600" fill="#f1f1f6">Output Callback</text>
+  <text x="1025" y="163" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#ff3fa4">audio thread</text>
+  <text x="1025" y="177" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">underrun → silence</text>
+
+  <!-- arrows -->
+  <line x1="55" y1="150" x2="76" y2="150" stroke="#8a8d9c" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="230" y1="150" x2="276" y2="150" stroke="#8a8d9c" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="253" y="140" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">push</text>
+  <line x1="410" y1="150" x2="456" y2="150" stroke="#8a8d9c" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="433" y="140" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">pop</text>
+  <line x1="730" y1="150" x2="766" y2="150" stroke="#8a8d9c" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="748" y="140" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">push</text>
+  <line x1="900" y1="150" x2="946" y2="150" stroke="#8a8d9c" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="923" y="140" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">pop</text>
+  <line x1="1100" y1="150" x2="1121" y2="150" stroke="#8a8d9c" stroke-width="1.6" marker-end="url(#arrow)"/>
 </svg>

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 220" role="img" aria-label="Varispeed pitch shifting: WSOLA time-stretches the signal by the shift ratio first, pitch-preserving but duration-changing; then a variable-rate resample restores the original duration and is the actual pitch-shift mechanism, shifting formants along with pitch.">
+  <title>Varispeed + WSOLA: stretch, then resample</title>
+  <defs>
+    <marker id="vwArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a8d9c"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1180" height="220" fill="#12141a"/>
+
+  <rect x="20" y="75" width="170" height="70" rx="10" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="105" y="105" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#f1f1f6">input audio</text>
+  <text x="105" y="122" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">original rate</text>
+
+  <rect x="270" y="70" width="280" height="80" rx="10" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="410" y="102" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#f1f1f6">WSOLA time-stretch</text>
+  <text x="410" y="120" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">ratio = 2^(semitone/12)</text>
+  <text x="410" y="136" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">pitch fixed, duration changes</text>
+
+  <rect x="630" y="70" width="280" height="80" rx="10" fill="#1b1e27" stroke="#39ff88" stroke-width="2"/>
+  <text x="770" y="102" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#39ff88">resample (Catmull-Rom)</text>
+  <text x="770" y="120" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">restores duration</text>
+  <text x="770" y="136" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">the actual pitch shift</text>
+
+  <rect x="990" y="75" width="170" height="70" rx="10" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="1075" y="105" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#f1f1f6">output audio</text>
+  <text x="1075" y="122" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">pitch + formants shifted</text>
+
+  <line x1="190" y1="110" x2="266" y2="110" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#vwArrow)"/>
+  <line x1="550" y1="110" x2="626" y2="110" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#vwArrow)"/>
+  <line x1="910" y1="110" x2="986" y2="110" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#vwArrow)"/>
+
+  <text x="590" y="195" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" font-style="italic" fill="#8a8d9c">stretch-then-resample keeps WSOLA's lookahead fixed and ratio-independent — the reverse order would scale latency with shift amount</text>
+</svg>

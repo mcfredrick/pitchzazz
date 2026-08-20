@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 260" role="img" aria-label="Each frame is windowed and transformed. The phase difference from the previous frame gives each bin's true instantaneous frequency. That frequency and magnitude are relocated to a shifted bin, and phase is accumulated coherently across frames before an inverse transform and windowed overlap-add.">
+  <title>Phase vocoder: per-bin phase difference &#8594; relocate to a shifted bin</title>
+  <defs>
+    <marker id="pvArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a8d9c"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1180" height="260" fill="#12141a"/>
+
+  <rect x="20" y="80" width="190" height="70" rx="10" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="115" y="110" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#f1f1f6">frame + window</text>
+  <text x="115" y="128" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">Hann-ish, size = frameSize</text>
+
+  <rect x="240" y="80" width="170" height="70" rx="10" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="325" y="110" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#f1f1f6">FFT</text>
+  <text x="325" y="128" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">magnitude, phase per bin</text>
+
+  <rect x="440" y="75" width="230" height="80" rx="10" fill="#1b1e27" stroke="#39ff88" stroke-width="2"/>
+  <text x="555" y="105" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#39ff88">phase diff &#8594; true freq</text>
+  <text x="555" y="122" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">unwrap mod 2&#960; (qpd trick)</text>
+  <text x="555" y="138" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">vs. lastPhase[k]</text>
+
+  <path d="M 490 75 C 470 30, 640 30, 620 75" fill="none" stroke="#39ff88" stroke-width="1.3" stroke-dasharray="3 3" marker-end="url(#pvArrow)"/>
+  <text x="555" y="30" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#39ff88">lastPhase[k] carried to next frame</text>
+
+  <rect x="700" y="75" width="230" height="80" rx="10" fill="#1b1e27" stroke="#39ff88" stroke-width="2"/>
+  <text x="815" y="105" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#39ff88">move to bin&#8217; = round(k·shift)</text>
+  <text x="815" y="122" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">accumulate magnitude</text>
+  <text x="815" y="138" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">+ synthesized phase</text>
+
+  <rect x="960" y="80" width="200" height="70" rx="10" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+  <text x="1060" y="110" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#f1f1f6">IFFT + overlap-add</text>
+  <text x="1060" y="128" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">hop = frame / oversampling</text>
+
+  <line x1="210" y1="115" x2="236" y2="115" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#pvArrow)"/>
+  <line x1="410" y1="115" x2="436" y2="115" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#pvArrow)"/>
+  <line x1="670" y1="115" x2="696" y2="115" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#pvArrow)"/>
+  <line x1="930" y1="115" x2="956" y2="115" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#pvArrow)"/>
+
+  <text x="590" y="220" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" font-style="italic" fill="#8a8d9c">oversampling trades CPU for time resolution &#8212; docs/PERFORMANCE_LOG.md's 32&#8594;8 fix</text>
+</svg>

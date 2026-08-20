@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 260" role="img" aria-label="Analysis marks sit on a grid spaced one pitch period apart. Synthesis marks sit on a different grid, spaced period divided by the shift ratio apart. Each synthesis mark reads a windowed grain from the analysis mark at or before it and writes that content at its own position. Shown here for a pitch shift up: the synthesis grid is denser, so consecutive synthesis marks reuse the same analysis grain.">
+  <title>TD-PSOLA: read one grid, write another</title>
+  <defs>
+    <marker id="psArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a8d9c"/>
+    </marker>
+    <marker id="psArrowG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#39ff88"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1180" height="260" fill="#12141a"/>
+
+  <text x="40" y="45" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" fill="#8a8d9c">analysis marks &#8212; spacing = period (fixed)</text>
+  <line x1="60" y1="80" x2="1120" y2="80" stroke="#2c3140" stroke-width="1.4"/>
+  <g fill="#8a8d9c">
+    <circle cx="80" cy="80" r="5"/><circle cx="205" cy="80" r="5"/>
+    <circle cx="330" cy="80" r="9" fill="#1b1e27" stroke="#39ff88" stroke-width="2"/>
+    <circle cx="455" cy="80" r="5"/><circle cx="580" cy="80" r="5"/>
+    <circle cx="705" cy="80" r="5"/><circle cx="830" cy="80" r="5"/>
+    <circle cx="955" cy="80" r="5"/><circle cx="1080" cy="80" r="5"/>
+  </g>
+  <path d="M 270 80 C 270 45, 390 45, 390 80" fill="#39ff88" fill-opacity="0.18" stroke="none"/>
+  <text x="330" y="105" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#39ff88">grain read here (floor-aligned)</text>
+
+  <text x="40" y="230" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" fill="#8a8d9c">synthesis marks &#8212; spacing = period / shift ratio</text>
+  <line x1="60" y1="195" x2="1120" y2="195" stroke="#2c3140" stroke-width="1.4"/>
+  <g fill="#8a8d9c">
+    <circle cx="80" cy="195" r="5"/><circle cx="165" cy="195" r="5"/><circle cx="250" cy="195" r="5"/>
+    <circle cx="335" cy="195" r="7" fill="#1b1e27" stroke="#39ff88" stroke-width="2"/>
+    <circle cx="420" cy="195" r="7" fill="#1b1e27" stroke="#39ff88" stroke-width="2"/>
+    <circle cx="505" cy="195" r="5"/><circle cx="590" cy="195" r="5"/><circle cx="675" cy="195" r="5"/>
+    <circle cx="760" cy="195" r="5"/><circle cx="845" cy="195" r="5"/><circle cx="930" cy="195" r="5"/>
+    <circle cx="1015" cy="195" r="5"/><circle cx="1100" cy="195" r="5"/>
+  </g>
+  <text x="378" y="220" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#39ff88">both written from the same grain &#8594; reused, closer together &#8594; higher pitch</text>
+
+  <line x1="330" y1="89" x2="335" y2="186" stroke="#39ff88" stroke-width="1.6" marker-end="url(#psArrowG)"/>
+  <line x1="330" y1="89" x2="420" y2="186" stroke="#39ff88" stroke-width="1.6" marker-end="url(#psArrowG)"/>
+</svg>

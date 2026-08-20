@@ -1,17 +1,61 @@
 # Algorithm study sheet
 
-Quick-reference for Q&A beyond what fits in the `<10min` code tour
-(`.tours/pitchzazz-walkthrough.tour`). Each section is a cheat sheet, not
-a narrative — for the full story (data, iteration, reverted attempts) see
-`docs/ARCHITECTURE.md`, `docs/COMPARISON.md`, `docs/PERFORMANCE_LOG.md`,
-and `docs/FINDINGS.md`, all linked inline below. Seven mechanisms, six
-with tour stops (1, 3, 4, 7, 8, and 10) — section 7 (Varispeed + WSOLA)
-doesn't have one yet, tracked in `docs/ROADMAP.md`'s documentation
-follow-up note.
+Quick-reference for Q&A beyond what fits in the live demo. Two code
+tours exist: `.tours/pitchzazz-live-demo.tour` (7 stops, the actual
+~10-minute live path) and `.tours/pitchzazz-walkthrough.tour` (12 stops,
+the full async/leave-behind version — everything the live path cuts is
+still here). Each section below opens with a short plain-language
+explanation and a diagram, then the same cheat-sheet depth this doc
+always had — not a narrative, for the full story (data, iteration,
+reverted attempts) see `docs/ARCHITECTURE.md`, `docs/COMPARISON.md`,
+`docs/PERFORMANCE_LOG.md`, and `docs/FINDINGS.md`, all linked inline
+below. Seven mechanisms, all seven with a dedicated stop in the full
+tour.
+
+## Glossary
+
+Every acronym used below and in the tour, in one place — skim this once
+before the demo rather than hunting for a definition mid-sentence.
+
+| Term | Stands for | In one line |
+|---|---|---|
+| **API** | Application Programming Interface | A defined way for one piece of code to call into another. |
+| **CLI** | Command-Line Interface | `pitch-cli`, the original terminal-only Rust prototype, before the GUI plugin existed. |
+| **DAW** | Digital Audio Workstation | The host app (Ableton Live, etc.) that loads pitchzazz as a plugin. |
+| **DSP** | Digital Signal Processing | The math that actually manipulates the audio signal — detection, shifting, quantizing. |
+| **FFI** | Foreign Function Interface | How the C++ plugin calls into the separately-compiled Rust engine. |
+| **FFT** / **IFFT** | (Inverse) Fast Fourier Transform | Converts a block of audio between the time domain (a waveform) and the frequency domain (a spectrum), and back. |
+| **FIFO** | First In, First Out | The lock-free queue that hands audio between the real-time audio thread and the worker thread. |
+| **MIDI** | Musical Instrument Digital Interface | The note-on/note-off message protocol. |
+| **MPM** | McLeod Pitch Method | This project's pitch-detection algorithm — a modified, normalized autocorrelation technique. |
+| **NSDF** | Normalized Square Difference Function | MPM's core trick: autocorrelation normalized so peaks are comparable at every lag, not just biased toward small ones. |
+| **OLA** | Overlap-Add | Reconstructing a signal by summing overlapping windowed segments — the synthesis half of both the phase vocoder and PSOLA. |
+| **PSOLA** / **TD-PSOLA** | (Time-Domain) Pitch-Synchronous Overlap-Add | One of this project's three pitch-shift engines — re-spaces time-domain grains to change pitch. |
+| **PV** | Phase vocoder (informal shorthand) | Used in a couple of latency tables below for this project's frequency-domain pitch-shift engine. |
+| **SPSC** | Single-Producer, Single-Consumer | The threading pattern the lock-free ring buffers rely on: exactly one thread writes, exactly one reads. |
+| **STFT** | Short-Time Fourier Transform | Repeated FFTs over overlapping windows — what the phase vocoder is built on. |
+| **TSM** | Time-Scale Modification | Changing a signal's duration without changing its pitch — the first stage (WSOLA) of the Varispeed engine. |
+| **UB** | Undefined Behavior | C++ behavior the language standard places zero requirements on — a real, crash-capable bug class, not a style nit. |
+| **UI** / **UX** | User Interface / User Experience | |
+| **ULP** | Unit in the Last Place | The smallest possible gap between two adjacent representable floating-point numbers — the scale of section 5's floor-alignment rounding bug. |
+| **WSOLA** | Waveform Similarity Overlap-Add | The correlation-guided time-stretching technique behind the Varispeed engine; also used generically for "OLA that searches for the best-matching splice point." |
+
+Two symbols that show up a lot and aren't acronyms: **τ** (tau) is lag,
+measured in samples — "how far offset is this copy of the signal from
+itself?" **k** is an FFT bin index — "which frequency slot in the
+spectrum?"
 
 ---
 
 ## 1. Real-time audio safety (no-block / no-allocate / no-lock)
+
+**How it works, simply:** the audio callback that the OS calls on a
+hard deadline does exactly one thing — push or pop a lock-free queue.
+Everything expensive (detection, quantization, pitch-shifting) happens on
+a separate worker thread that has no deadline and is free to allocate,
+lock, or block.
+
+![Audio callbacks only push and pop a lock-free ring buffer; all detection, quantization, and shifting happens on a separate worker thread that is free to allocate.](../.tours/assets/realtime-safety.svg)
 
 **The rule:** nothing in an audio callback (`processBlock`, cpal's
 `build_input_stream`/`build_output_stream` closures) may block, allocate,
@@ -91,6 +135,17 @@ in review before it shipped.
 
 ## 2. Pitch detection — McLeod Pitch Method (MPM) / NSDF peak-picking
 
+**How it works, simply:** a periodic signal looks like itself when you
+shift it forward by exactly one period, so autocorrelation (comparing the
+signal to a delayed copy of itself at every possible delay) finds a peak
+at that delay. MPM's (the McLeod Pitch Method's) contribution is normalizing that
+comparison — the NSDF, or Normalized Square Difference Function — so
+peaks are comparable across delays, then trusting the first
+strong peak rather than the tallest one — that's what fixes the classic
+"detected the octave below" failure mode plain autocorrelation has.
+
+![Pitch detection pipeline: an audio block is autocorrelated via FFT, normalized into the NSDF so peaks are comparable across lags, then the first strong peak is picked and refined to sub-sample precision.](../.tours/assets/pitch-detection.svg)
+
 Ported line-for-line from the Rust `pitch-detection` crate's
 `McLeodDetector`, not re-derived from the paper — both engines need
 identical peak-picking/interpolation for the Rust-vs-C++ comparison to
@@ -151,7 +206,7 @@ matters is matching the *shape* Rust's constants (`POWER_THRESHOLD`,
 computation. Missing this entirely (not compensating for JUCE's 1/N at
 all) would have made pitch detection silently never cross its clarity
 threshold — no crash, just permanently `{0, 0}` (`docs/COMPARISON.md`'s
-FFT-normalization section, `docs/FINDINGS.md` #7).
+FFT-normalization section, `docs/FINDINGS.md` #10).
 
 **FFT size divergence**: Rust zero-pads to exactly `blockSize +
 blockSize/2` (3072 for a 2048 block, `realfft` accepts any length); C++
@@ -190,6 +245,13 @@ size constraints section).
 ---
 
 ## 3. Scale quantization — nearest-in-scale search
+
+**How it works, simply:** if the detected note is already one of the
+scale's own notes, leave it alone. If it isn't, walk outward by semitone
+— one below, one above, two below, two above, and so on — until landing
+on a note that's in the scale; on a tie, the note below wins.
+
+![Scale quantization: a detected note that is already in the scale passes through unchanged; otherwise the algorithm searches outward by semitone distance, checking below before above, until it finds the nearest in-scale note.](../.tours/assets/scale-quantization.svg)
 
 `cpp-plugin/Source/DSP/Scale.cpp:55-76`, `nearestInScaleMidi`.
 
@@ -264,6 +326,15 @@ right, trivially testable against every scale type.
 ---
 
 ## 4. Phase vocoder pitch shifting
+
+**How it works, simply:** take the signal into the frequency domain with
+an FFT (Fast Fourier Transform), then move each frequency bin's content to a new bin scaled by the
+pitch ratio — a bin at 440Hz moves to 880Hz for a shift up an octave —
+and convert back. Relocating spectral content is the entire pitch-shift
+mechanism; everything else in this section is bookkeeping to make that
+relocation sound clean (phase coherence, windowing) rather than smeared.
+
+![Each frame's phase difference gives true frequency, which is relocated to a shifted bin and accumulated across frames before an inverse transform and windowed overlap-add](../.tours/assets/phase-vocoder-mechanism.svg)
 
 Bernsee-style STFT phase vocoder (`smbPitchShift`), ported from the Rust
 `pitch_shift` crate. `PitchShifter::shiftPitch`,
@@ -398,6 +469,18 @@ Two consequences worth being explicit about, both surfaced by the same
 
 ## 5. TD-PSOLA pitch shifting
 
+TD-PSOLA stands for Time-Domain Pitch-Synchronous Overlap-Add.
+
+**How it works, simply:** cut the signal into small grains, one centered
+on each detected pitch period, then paste those grains back down at new
+positions spaced closer together (pitch up) or farther apart (pitch
+down) than they were recorded at. Each grain's own content never
+changes — only its *spacing* does. That's the whole mechanism: re-timing
+where periods land is what the ear hears as a pitch change, since it's
+literally squeezing or stretching how many wave cycles happen per second.
+
+![Analysis marks sit on a fixed-period grid; synthesis marks sit on a different grid; each synthesis mark reads the analysis grain at or before it and writes it at its own position, reusing grains when shifting up](../.tours/assets/psola-mechanism.svg)
+
 `PSOLAPitchShifter::placeGrainAt`, `cpp-plugin/Source/DSP/PSOLAPitchShifter.cpp:69-151`.
 The algorithm family real low-latency vocal-effects hardware uses, built
 specifically as a latency-focused alternative to the phase vocoder
@@ -488,7 +571,7 @@ nothing should — see docs/PERFORMANCE_LOG.md for why re-tuning PSOLA's
 `minHz` further wasn't done here (see the "Likely questions" below).
 
 **The floor-alignment epsilon bug**
-(`PSOLAPitchShifter.cpp:117-129`, `docs/FINDINGS.md` #15): floating-point
+(`PSOLAPitchShifter.cpp:117-129`, `docs/FINDINGS.md` #18): floating-point
 error from repeated `+=` accumulation of `synthesisSpacing`
 (`PSOLAPitchShifter.cpp:192`) occasionally left `synthesisMarkPos` a few
 ULPs *below* an exact integer multiple of `periodSamples` instead of
@@ -503,7 +586,7 @@ problem at all — then confirmed via direct instrumentation. Fixed with a
 `+1e-6` epsilon before the `floor()` call.
 
 **The crackle/beat artifact — accepted limitation, not silently
-swept aside** (`PSOLAPitchShifter.h:83-94`, `docs/FINDINGS.md` #16-17):
+swept aside** (`PSOLAPitchShifter.h:83-94`, `docs/FINDINGS.md` #19-20):
 reading from a single floor-quantized analysis bucket is exact for a
 *stationary* test tone (every bucket is mathematically identical), but
 real, non-stationary voice has natural cycle-to-cycle jitter, so
@@ -531,7 +614,7 @@ has room for; disclosed as a known, accepted limitation, not hidden.
 Three separate automated test approaches were tried to *verify* the
 crossfade fix and none discriminated fixed-vs-broken (`docs/FINDINGS.md`
 #16's account) — the same "automated metric passing ≠ perceptual quality"
-lesson the hot-swap crossfade work already logged (finding #11, section
+lesson the hot-swap crossfade work already logged (finding #14, section
 6 below).
 
 **Likely questions:**
@@ -580,6 +663,16 @@ lesson the hot-swap crossfade work already logged (finding #11, section
 
 ## 6. Hot-swap engine architecture
 
+**How it works, simply:** switching pitch-shift engines live is one
+atomic pointer swap, picked up by the worker thread between audio blocks
+— never mid-block, so the real-time thread is never affected. To hide
+the fact that the new engine starts with no warmed-up internal state,
+the old and new engines both process the same audio for a few blocks
+while their outputs are smoothly cross-faded, so there's no click or
+dropout at the moment of the swap.
+
+![Hot-swap: a new engine is stored into one atomic pointer, picked up by the worker thread between blocks, then blended in via a crossfade over four blocks](../.tours/assets/hot-swap.svg)
+
 Three engines (Rust via FFI, C++ phase vocoder, C++ TD-PSOLA) are
 runtime-swappable without an audio dropout. `CorrectorWorker`,
 `cpp-plugin/Source/DSP/CorrectorWorker.cpp`.
@@ -603,7 +696,7 @@ unaffected by a swap in progress; the FIFOs it touches don't know or
 care that a swap happened on the other side.
 
 **Why the pointer exchange alone isn't enough — the crossfade**
-(`docs/FINDINGS.md` #11): an instant switch discards the outgoing
+(`docs/FINDINGS.md` #14): an instant switch discards the outgoing
 engine's warmed-up internal state (windowing FIFO, phase accumulator,
 overlap-add buffer) and starts the new engine cold — measured as a real,
 audible-scale discontinuity by a dedicated dropout test
@@ -686,6 +779,19 @@ language itself.
 ---
 
 ## 7. Varispeed + WSOLA pitch shifting
+
+WSOLA stands for Waveform Similarity Overlap-Add.
+
+**How it works, simply:** first, stretch or compress the signal's
+*duration* by the pitch ratio while keeping its pitch unchanged (WSOLA
+does this part). Then play that stretched signal back through a resampler at a different
+rate, which restores the original duration — and that resampling step is
+the actual pitch shift, the same physical effect as speeding up or
+slowing down a tape reel. Because it's a genuine rate change, formants
+shift right along with the pitch, unlike the other two engines, which
+deliberately keep formants fixed.
+
+![Varispeed pitch shifting: WSOLA time-stretches the signal by the shift ratio first, pitch-preserving but duration-changing; then a variable-rate resample restores the original duration and is the actual pitch-shift mechanism, shifting formants along with pitch.](../.tours/assets/varispeed-wsola-mechanism.svg)
 
 `VarispeedShifter::shiftPitch`, `cpp-plugin/Source/DSP/VarispeedShifter.cpp:13-87`.
 Third algorithm family, deliberately time-domain and deliberately not a
@@ -808,7 +914,7 @@ sounding similar to PSOLA's own crackle/beat artifact.
     settles to a stable constant per shift amount (never oscillates), zero
     output discontinuities (`delta > 0.15`) over 122,880 samples per case.
   - *Disclosed limitation, same standard as PSOLA's own crackle/beat
-    (`docs/FINDINGS.md` #16/#17):* this is confirmed only against a
+    (`docs/FINDINGS.md` #19/#20):* this is confirmed only against a
     stationary test tone, close to the worst case for any correlation
     search. Real voiced material's natural jitter/harmonic content should
     behave at least as well, but isn't separately measured. A more
@@ -849,7 +955,7 @@ region.
   not count as done?* Because the metric that was improving (jump size,
   jump frequency) wasn't the metric that mattered (perceived smoothness)
   — the same "automated/proxy metric passing ≠ perceptual quality" lesson
-  this project already logged for the hot-swap crossfade (finding #11)
+  this project already logged for the hot-swap crossfade (finding #14)
   and PSOLA's crossfade revert (finding #20). Real listening caught what
   the instrumented sine-tone jump-count alone would have called a clear
   improvement.
