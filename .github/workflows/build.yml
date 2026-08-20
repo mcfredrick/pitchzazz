@@ -274,19 +274,21 @@ jobs:
           # BUILD_DIR this workflow needs for every step after this one.
           # Re-assert it last so it wins.
           #
-          # tr, not a straight ${{ github.workspace }} substitution: on
-          # Windows that context value is backslash-separated
+          # tr, not a straight github.workspace substitution: on Windows
+          # that context value is backslash-separated
           # (D:\a\pitchzazz\pitchzazz), and every later use of BUILD_DIR
-          # is embedded unquoted into a bash `run:` command — bash's own
+          # is embedded unquoted into a bash run command — bash's own
           # backslash-escape processing on an unquoted string silently
           # eats each backslash and the letter after it (\p -> p), which
           # is exactly what produced the real, observed CI corruption
           # "D:/a/pitchzazz/pitchzazz/cpp-plugin/apitchzazzpitchzazz/cpp-plugin/build"
           # (github.workspace's backslashes mangled mid-string). Doing the
-          # replacement here, once, with the real $GITHUB_WORKSPACE env
-          # var (not the ${{ }} template form) keeps everything
-          # downstream on plain forward slashes, which cmake/ctest already
-          # handle fine as CLI arguments on Windows.
+          # replacement here, once, with the real GITHUB_WORKSPACE env var
+          # (the shell one, not a workflow-expression substitution — GitHub
+          # Actions expression syntax has no replace/string-substitution
+          # function) keeps everything downstream on plain forward
+          # slashes, which cmake/ctest already handle fine as CLI
+          # arguments on Windows.
           echo "BUILD_DIR=$(echo "$GITHUB_WORKSPACE" | tr '\\' '/')/cpp-plugin/build" >> $GITHUB_ENV
 
       # ── Signing status detection ──────────────────────────────────
