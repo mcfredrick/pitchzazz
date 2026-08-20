@@ -49,15 +49,7 @@ env:
   # regardless of which job/step's shell cwd it runs from, instead of
   # needing dozens of individual cpp-plugin/ prefixes threaded through by
   # hand.
-  # github.workspace is backslash-separated on Windows runners
-  # (D:\a\pitchzazz\pitchzazz); appending the forward-slash suffix below
-  # produces a mixed-separator path. cmake/ctest tolerate that fine as a
-  # string argument, but a step's `working-directory:` field is handed
-  # straight to the runner's process launcher, which doesn't — real CI
-  # failure: "An error occurred trying to start process ... The directory
-  # name is invalid." replace() normalizes to forward slashes throughout,
-  # which Windows accepts everywhere this value is used.
-  BUILD_DIR: ${{ replace(github.workspace, '\', '/') }}/cpp-plugin/build
+  BUILD_DIR: ${{ github.workspace }}/cpp-plugin/build
   DISPLAY: :0
   HOMEBREW_NO_INSTALL_CLEANUP: 1
   SCCACHE_GHA_ENABLED: true
@@ -280,9 +272,8 @@ jobs:
           # scripts/build.sh outside CI) — the loop above just blindly
           # re-exported it to $GITHUB_ENV, clobbering the absolute
           # BUILD_DIR this workflow needs for every step after this one.
-          # Re-assert it last so it wins. Forward slashes throughout (see
-          # the workflow-level BUILD_DIR's comment) — this must match it.
-          echo "BUILD_DIR=${{ replace(github.workspace, '\', '/') }}/cpp-plugin/build" >> $GITHUB_ENV
+          # Re-assert it last so it wins.
+          echo "BUILD_DIR=${{ github.workspace }}/cpp-plugin/build" >> $GITHUB_ENV
 
       # ── Signing status detection ──────────────────────────────────
       - name: Determine signing status
@@ -388,9 +379,16 @@ jobs:
         run: cmake --build ${{ env.BUILD_DIR }} --config ${{ env.BUILD_TYPE }} --parallel 4
 
       # ── Test ──────────────────────────────────────────────────────
+      # BUILD_DIR mixes backslashes (from github.workspace, native on
+      # Windows) with forward slashes (the /cpp-plugin/build suffix). cmake
+      # and ctest tolerate that fine as a string argument, but a step's
+      # YAML-level `working-directory:` field is handed straight to the
+      # runner's process launcher, which doesn't — real CI failure: "An
+      # error occurred trying to start process ... The directory name is
+      # invalid." `cd` from inside the bash script instead — bash's own
+      # path resolution (MSYS on Windows) tolerates the mixed separators.
       - name: Run Catch2 Tests
-        working-directory: ${{ env.BUILD_DIR }}
-        run: ctest --verbose --output-on-failure
+        run: cd "${{ env.BUILD_DIR }}" && ctest --verbose --output-on-failure
 
       - name: Download PluginVal
         run: |
