@@ -95,8 +95,8 @@ that's set up.
   across both engines, what caught it, and the fix.
 - `docs/TESTING.md` — the testing methodology, including the automated
   hot-swap dropout-detection test.
-- `docs/ROADMAP.md` — phased plan and current status, including a
-  planned browser/WebAssembly build of the DSP engines for a live,
-  no-install demo.
+- `docs/ROADMAP.md` — phased plan and current status. A browser/
+  WebAssembly build of the DSP engines, for a live no-install demo, is
+  in progress as a follow-on to this notebook.
 - `CLAUDE.md` — project context and working rules for an AI coding agent
   picking this up; also a reasonable map of the repo for a human.
