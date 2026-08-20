@@ -47,13 +47,19 @@ void RustCorrectorEngine::setScale (Scale newScale) noexcept
     pitchzazz_rust::set_scale (*corrector, toTonicPitchClass (newScale), toModeIndex (newScale));
 }
 
-CorrectionResult RustCorrectorEngine::process (const std::vector<float>& samples, double sampleRate)
+CorrectionResult RustCorrectorEngine::process (const std::vector<float>& samples, double sampleRate, std::vector<float>& output)
 {
-    CorrectionResult result;
-    result.samples.assign ((size_t) blockSize, 0.0f);
+    jassert ((int) output.size() == blockSize);
 
+    CorrectionResult result;
+
+    // No pre-zero-fill needed: the Rust side's process() (crates/
+    // pitch-core-ffi/src/lib.rs) always fully writes `out` on every call
+    // — real samples via copy_from_slice on success, or out.fill(0.0) in
+    // its catch_unwind panic-safety fallback — so `output` never carries
+    // stale content from a previous block through to the caller.
     const rust::Slice<const float> inSlice (samples.data(), samples.size());
-    const rust::Slice<float> outSlice (result.samples.data(), result.samples.size());
+    const rust::Slice<float> outSlice (output.data(), output.size());
 
     const auto timings = pitchzazz_rust::process (*corrector, inSlice, (std::size_t) sampleRate, outSlice);
 

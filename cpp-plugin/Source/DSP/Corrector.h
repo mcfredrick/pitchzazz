@@ -44,7 +44,6 @@ struct StageTimings
 
 struct CorrectionResult
 {
-    std::vector<float> samples;
     float detectedHz = 0.0f;
     float detectedClarity = 0.0f;
     float semitoneShift = 0.0f;
@@ -59,8 +58,11 @@ struct CorrectionResult
 /// cost/latency data behind it — re-measured for this engine
 /// specifically, not assumed to carry over from the Rust side's numbers.
 ///
-/// Not real-time-safe to call directly from processBlock: `process()`
-/// allocates its output vector. Belongs on a worker thread, fed and
+/// Not real-time-safe to call directly from processBlock: this is a full
+/// FFT-based DSP pass, too costly for the hard audio-thread deadline —
+/// not because it allocates (it doesn't; `output` is caller-owned and
+/// reused across calls, same as every other steady-state buffer in this
+/// class, see docs/FINDINGS.md). Belongs on a worker thread, fed and
 /// drained via lock-free queues — see docs/ARCHITECTURE.md and the
 /// Day 3 task in docs/ROADMAP.md Phase 2.
 class Corrector
@@ -79,8 +81,12 @@ public:
     void setCorrectionAmount (float amount) noexcept { correctionAmount = juce::jlimit (correctionAmountMin, correctionAmountMax, amount); }
     void setRetuneSpeedMs (float speedMs) noexcept { retuneSpeedMs = juce::jlimit (retuneSpeedMsMin, retuneSpeedMsMax, speedMs); }
 
-    /// `samples.size()` must equal the `blockSize` passed to the constructor.
-    [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate);
+    /// `samples.size()` and `output.size()` must both equal the
+    /// `blockSize` passed to the constructor — `output` is caller-owned
+    /// scratch storage, written in place rather than returned, so a
+    /// caller that keeps it alive across calls (like CorrectorWorker's
+    /// persistent buffers) gets zero per-block heap allocation here.
+    [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate, std::vector<float>& output);
 
     /// Algorithmic pipeline latency, in samples — delegates to the
     /// shifter, since that's the sole contributor (see

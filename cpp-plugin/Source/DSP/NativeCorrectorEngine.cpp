@@ -13,9 +13,9 @@ void NativeCorrectorEngine::setScale (Scale newScale) noexcept
     corrector.setScale (newScale);
 }
 
-CorrectionResult NativeCorrectorEngine::process (const std::vector<float>& samples, double sampleRate)
+CorrectionResult NativeCorrectorEngine::process (const std::vector<float>& samples, double sampleRate, std::vector<float>& output)
 {
-    return corrector.process (samples, sampleRate);
+    return corrector.process (samples, sampleRate, output);
 }
 
 } // namespace pitchzazz

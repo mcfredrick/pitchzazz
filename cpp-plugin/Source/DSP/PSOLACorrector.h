@@ -22,8 +22,10 @@ namespace pitchzazz
 /// CorrectionResult are shared from Corrector.h rather than duplicated.
 ///
 /// Not real-time-safe to call directly from processBlock — same
-/// constraint as Corrector, same reason (process() allocates its output
-/// vector). Lives on CorrectorWorker's background thread.
+/// constraint as Corrector, same reason (a full DSP pass too costly for
+/// the hard audio-thread deadline; see Corrector.h's doc for why that's
+/// no longer "because it allocates"). Lives on CorrectorWorker's
+/// background thread.
 class PSOLACorrector
 {
 public:
@@ -48,8 +50,11 @@ public:
     /// since a phase vocoder has no concept of "grain."
     void setGrainWidthMultiplier (float multiplier) noexcept { shifter.setGrainWidthMultiplier (multiplier); }
 
-    /// `samples.size()` must equal the `blockSize` passed to the constructor.
-    [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate);
+    /// `samples.size()` and `output.size()` must both equal the
+    /// `blockSize` passed to the constructor — see Corrector::process's
+    /// equivalent doc for why `output` is caller-owned scratch storage
+    /// rather than a returned, freshly-allocated buffer.
+    [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate, std::vector<float>& output);
 
     [[nodiscard]] int getLatencySamples() const noexcept { return shifter.getLatencySamples(); }
 

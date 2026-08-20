@@ -34,9 +34,10 @@ Corrector::Corrector (int blockSizeIn, double sampleRate, int windowSizeMs, Scal
 {
 }
 
-CorrectionResult Corrector::process (const std::vector<float>& samples, double sampleRate)
+CorrectionResult Corrector::process (const std::vector<float>& samples, double sampleRate, std::vector<float>& output)
 {
     jassert ((int) samples.size() == blockSize);
+    jassert ((int) output.size() == blockSize);
 
     CorrectionResult result;
 
@@ -69,8 +70,7 @@ CorrectionResult Corrector::process (const std::vector<float>& samples, double s
     previousAppliedShift = appliedShift;
 
     const auto shiftStart = std::chrono::steady_clock::now();
-    result.samples.assign (samples.size(), 0.0f);
-    shifter.shiftPitch (overSampling, appliedShift, samples, result.samples);
+    shifter.shiftPitch (overSampling, appliedShift, samples, output);
     result.timings.shiftUs = microsSince (shiftStart);
 
     result.detectedHz = pitch.frequencyHz;

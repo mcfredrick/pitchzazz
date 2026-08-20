@@ -58,6 +58,13 @@ private:
     std::vector<float> mScratch; // NSDF denominator, length fftSize
     std::vector<float> nsdf;    // normalized square difference, length fftSize
 
+    // Reused across detect() calls via .clear() (retains capacity) rather
+    // than a fresh local vector per call — the class doc's "no per-block
+    // allocation" claim used to be false in practice: detectPeaks() built
+    // a brand-new vector on every call regardless of this comment. See
+    // docs/FINDINGS.md for the finding.
+    std::vector<std::pair<size_t, float>> peakScratch;
+
     static constexpr float powerThreshold = 0.15f;
     static constexpr float clarityThreshold = 0.1f;
 

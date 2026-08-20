@@ -22,9 +22,10 @@ namespace pitchzazz
 /// duplicated.
 ///
 /// Not real-time-safe to call directly from processBlock — same
-/// constraint as Corrector/PSOLACorrector, same reason (process()
-/// allocates its output vector). Lives on CorrectorWorker's background
-/// thread.
+/// constraint as Corrector/PSOLACorrector, same reason (a full DSP pass
+/// too costly for the hard audio-thread deadline; see Corrector.h's doc
+/// for why that's no longer "because it allocates"). Lives on
+/// CorrectorWorker's background thread.
 class VarispeedCorrector
 {
 public:
@@ -37,8 +38,11 @@ public:
     void setCorrectionAmount (float amount) noexcept { correctionAmount = juce::jlimit (correctionAmountMin, correctionAmountMax, amount); }
     void setRetuneSpeedMs (float speedMs) noexcept { retuneSpeedMs = juce::jlimit (retuneSpeedMsMin, retuneSpeedMsMax, speedMs); }
 
-    /// `samples.size()` must equal the `blockSize` passed to the constructor.
-    [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate);
+    /// `samples.size()` and `output.size()` must both equal the
+    /// `blockSize` passed to the constructor — see Corrector::process's
+    /// equivalent doc for why `output` is caller-owned scratch storage
+    /// rather than a returned, freshly-allocated buffer.
+    [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate, std::vector<float>& output);
 
     [[nodiscard]] int getLatencySamples() const noexcept { return shifter.getLatencySamples(); }
 

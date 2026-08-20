@@ -818,3 +818,66 @@ latency was (`docs/PERFORMANCE_LOG.md`'s PSOLA entries) — the number
 above is derived from the formula, not independently confirmed by an
 onset probe; flagged as a follow-up, not treated as equivalent to having
 measured it.
+
+---
+
+## 2026-08-19 — Worker-thread per-block allocation removed
+
+Context: a design question ("the audio thread must never block/allocate/
+lock — should `CorrectorWorker`'s background thread too, for throughput,
+even without a hard deadline?") prompted a source audit of the DSP hot
+path rather than a profiling run — see `docs/FINDINGS.md` #25 for the
+full finding (renumbered from this entry's original #22 when merged into
+main — see that finding's note for why). Worth logging here per
+`CLAUDE.md` rule 6 since it's a performance-relevant change, even though
+it started from a design question rather than a measured budget miss.
+
+**What the audit found:** no locks anywhere in the hot path (confirmed by
+grep across every engine/worker file), but two genuine per-block heap
+allocations, on every engine, every block: `Corrector::process`/
+`PSOLACorrector::process`/`RustCorrectorEngine::process` each returned an
+owned `CorrectionResult` whose `.samples` vector was freshly allocated on
+every call (`result.samples.assign(blockSize, 0.0f)` on a
+default-constructed, zero-capacity vector), and `PitchDetector`'s
+internal peak-picking helper (`detectPeaks`) built a fresh local
+`std::vector<std::pair<size_t,float>>` every call — despite
+`PitchDetector`'s own class doc already (incorrectly) claiming "no
+per-block allocation." Neither was ever audible or caught by the Catch2
+suite: both are pure allocator-churn/timing-jitter costs, not correctness
+bugs — no test distinguishes an allocating implementation from a
+non-allocating one that returns identical values.
+
+**Fix:** `PitchEngine::process()` (and `Corrector`/`PSOLACorrector`/
+`RustCorrectorEngine`) now write into a caller-supplied
+`std::vector<float>& output` instead of returning an owned buffer — the
+same out-param convention `PitchShifter::shiftPitch` already used one
+layer down. `CorrectorWorker` owns three persistent, once-sized scratch
+buffers (`engineOutput`, `crossfadeOutput`, `blendedOutput`), which also
+removes the (larger, 3x) crossfade-path allocation as a side effect.
+`PitchDetector::detect()` reuses a persistent `peakScratch` member,
+`.clear()`'d rather than reallocated each call. Verified via the full
+Catch2 suite (36 test cases, 2323 assertions, all passing) after updating
+every call site (3 concrete engines, `CorrectorWorker`, 3 test files, the
+`CorrectorPerformance` benchmark — ~25 sites total).
+
+**Data — post-fix baseline** (`benchmarks/CorrectorPerformance.cpp`,
+**Debug** build — not comparable to this log's earlier Release-profile
+370us figure, see the "controlled for build profile" entry above for why
+mixing build profiles produced a misleading number once already):
+
+| Sample rate | `Corrector::process` mean (Debug, block 2048) |
+|---|---|
+| 44.1kHz | 3.028ms |
+| 48kHz | 3.065ms |
+| 96kHz | 3.104ms |
+
+**Caveat:** this is a post-fix baseline, not an isolated before/after
+delta — getting a true A/B number would mean rebuilding the pre-fix
+source in the same Debug configuration, which this session didn't do
+(the JUCE/Corrosion/Rust-FFI build cycle in this environment runs
+10+ minutes each time). The qualitative case for the fix — two
+allocate-then-free cycles removed from every block, on every engine, on
+a thread whose throughput has to keep up with the audio thread's
+consumption rate on average even without a hard per-block deadline — is
+the primary evidence; this table is a number for a future session to
+diff against, not a measured improvement claim on its own.

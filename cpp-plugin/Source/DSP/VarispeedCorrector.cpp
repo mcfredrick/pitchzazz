@@ -18,9 +18,10 @@ VarispeedCorrector::VarispeedCorrector (int blockSizeIn, double sampleRate, Scal
 {
 }
 
-CorrectionResult VarispeedCorrector::process (const std::vector<float>& samples, double sampleRate)
+CorrectionResult VarispeedCorrector::process (const std::vector<float>& samples, double sampleRate, std::vector<float>& output)
 {
     jassert ((int) samples.size() == blockSize);
+    jassert ((int) output.size() == blockSize);
 
     CorrectionResult result;
 
@@ -49,8 +50,7 @@ CorrectionResult VarispeedCorrector::process (const std::vector<float>& samples,
     previousAppliedShift = appliedShift;
 
     const auto shiftStart = std::chrono::steady_clock::now();
-    result.samples.assign (samples.size(), 0.0f);
-    shifter.shiftPitch (appliedShift, samples, result.samples);
+    shifter.shiftPitch (appliedShift, samples, output);
     result.timings.shiftUs = microsSince (shiftStart);
 
     result.detectedHz = pitch.frequencyHz;

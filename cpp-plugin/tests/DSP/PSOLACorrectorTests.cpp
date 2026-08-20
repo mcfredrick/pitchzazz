@@ -40,9 +40,10 @@ TEST_CASE ("PSOLACorrector: correction amount attenuates the applied shift", "[p
     noCorrection.setCorrectionAmount (0.0f);
 
     const auto input = sineBlock (detunedFreq, sampleRate, blockSize, 0);
-    const float fullShift = fullCorrection.process (input, sampleRate).semitoneShift;
-    const float halfShift = halfCorrection.process (input, sampleRate).semitoneShift;
-    const float noShift = noCorrection.process (input, sampleRate).semitoneShift;
+    std::vector<float> output (blockSize);
+    const float fullShift = fullCorrection.process (input, sampleRate, output).semitoneShift;
+    const float halfShift = halfCorrection.process (input, sampleRate, output).semitoneShift;
+    const float noShift = noCorrection.process (input, sampleRate, output).semitoneShift;
 
     REQUIRE (std::abs (fullShift) > 0.05f);
     CHECK (std::abs (noShift) < 0.01f);
@@ -59,7 +60,8 @@ TEST_CASE ("PSOLACorrector: zero retune speed reproduces instant full-snap behav
     corrector.setRetuneSpeedMs (0.0f);
 
     const auto input = sineBlock (detunedFreq, sampleRate, blockSize, 0);
-    const auto result = corrector.process (input, sampleRate);
+    std::vector<float> output (blockSize);
+    const auto result = corrector.process (input, sampleRate, output);
 
     CHECK (std::abs (result.semitoneShift) > 0.05f);
 }
@@ -75,8 +77,9 @@ TEST_CASE ("PSOLACorrector: positive retune speed glides towards the target inst
     glided.setRetuneSpeedMs (500.0f);
 
     const auto firstInput = sineBlock (detunedFreq, sampleRate, blockSize, 0);
-    const float instantShift = instant.process (firstInput, sampleRate).semitoneShift;
-    const float glidedFirstBlockShift = glided.process (firstInput, sampleRate).semitoneShift;
+    std::vector<float> output (blockSize);
+    const float instantShift = instant.process (firstInput, sampleRate, output).semitoneShift;
+    const float glidedFirstBlockShift = glided.process (firstInput, sampleRate, output).semitoneShift;
 
     REQUIRE (std::abs (instantShift) > 0.05f);
     CHECK (std::abs (glidedFirstBlockShift) < std::abs (instantShift) * 0.5f);
@@ -85,7 +88,7 @@ TEST_CASE ("PSOLACorrector: positive retune speed glides towards the target inst
     for (int block = 1; block < 40; ++block)
     {
         const auto blockInput = sineBlock (detunedFreq, sampleRate, blockSize, block);
-        lastShift = glided.process (blockInput, sampleRate).semitoneShift;
+        lastShift = glided.process (blockInput, sampleRate, output).semitoneShift;
     }
     CHECK (std::abs (lastShift - instantShift) < std::abs (instantShift) * 0.1f);
 }
