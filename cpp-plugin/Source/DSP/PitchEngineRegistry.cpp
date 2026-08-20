@@ -12,7 +12,7 @@ const std::vector<EngineDescriptor>& availableEngines()
     static const std::vector<EngineDescriptor> engines = {
         {
             "native-cpp",
-            "Native C++",
+            "Phase Vocoder (Native C++)",
             [] (const EngineConfig& config) -> std::unique_ptr<PitchEngine>
             {
                 return std::make_unique<NativeCorrectorEngine> (config);
@@ -20,7 +20,7 @@ const std::vector<EngineDescriptor>& availableEngines()
         },
         {
             "rust-ffi",
-            "Rust (FFI)",
+            "Phase Vocoder (Rust FFI)",
             [] (const EngineConfig& config) -> std::unique_ptr<PitchEngine>
             {
                 return std::make_unique<RustCorrectorEngine> (config);

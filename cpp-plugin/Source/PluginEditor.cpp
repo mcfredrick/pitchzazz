@@ -163,9 +163,15 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     performanceHeaderLabel.setColour (juce::Label::textColourId, juce::Colour (pitchzazz::colours::textSecondary));
     addAndMakeVisible (performanceHeaderLabel);
 
-    latencyValueLabel.setJustificationType (juce::Justification::centredLeft);
-    addAndMakeVisible (latencyValueLabel);
     addAndMakeVisible (latencyMeter);
+    // Magenta, distinct from the three stage meters' cyan/amber/green
+    // below — the one visual cue (beyond the row gap and the "Latency"
+    // vs. "Detect"/"Quantize"/"Shift" labels themselves) that this row is
+    // a different *kind* of quantity, not a fourth stage that sums into
+    // Total. See this file's class doc and docs/ALGORITHMS.md for why
+    // latency (buffering delay) and the per-stage meters (compute time)
+    // don't add — the row layout is identical to the stage rows below it
+    // on purpose, since they're all still "a name, a meter, a value."
     latencyMeter.setFillColour (juce::Colour (pitchzazz::colours::accentMagenta));
 
     // Each stage gets its own neon accent from the shared palette
@@ -176,14 +182,16 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     quantizeMeter.setFillColour (juce::Colour (pitchzazz::colours::accentAmber));
     shiftMeter.setFillColour (juce::Colour (pitchzazz::colours::accentGreen));
 
-    for (auto* label : { &detectLabel, &quantizeLabel, &shiftLabel })
+    for (auto* label : { &latencyLabel, &detectLabel, &quantizeLabel, &shiftLabel })
         label->setFont (juce::Font (13.0f));
-    for (auto* label : { &detectValueLabel, &quantizeValueLabel, &shiftValueLabel, &totalValueLabel })
+    for (auto* label : { &latencyValueLabel, &detectValueLabel, &quantizeValueLabel, &shiftValueLabel, &totalValueLabel })
     {
         label->setJustificationType (juce::Justification::centredLeft);
         label->setFont (juce::Font (13.0f));
     }
 
+    addAndMakeVisible (latencyLabel);
+    addAndMakeVisible (latencyValueLabel);
     addAndMakeVisible (detectLabel);
     addAndMakeVisible (detectMeter);
     addAndMakeVisible (detectValueLabel);
@@ -195,13 +203,14 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     addAndMakeVisible (shiftValueLabel);
     addAndMakeVisible (totalValueLabel);
 
-    // Height computed from resized()'s layout sum: 602px of stacked
+    // Height computed from resized()'s layout sum: 580px of stacked
     // content (tonic/mode/engine rows, the three creative-control
     // sliders, the pitch displays, the cents meter, bypass, the divider,
-    // and the three performance meters) plus the 16px top/bottom margins
-    // from getLocalBounds().reduced(16) — kept in sync with resized() by
-    // hand since JUCE has no layout-measurement API to derive this from.
-    setSize (320, 634);
+    // and the four performance meters — latency now the same row shape
+    // as the three stage meters) plus the 16px top/bottom margins from
+    // getLocalBounds().reduced(16) — kept in sync with resized() by hand
+    // since JUCE has no layout-measurement API to derive this from.
+    setSize (320, 612);
 
     updateRetuneControlsEnablement();
     updateGrainWidthControlEnablement();
@@ -256,10 +265,10 @@ void PitchzazzAudioProcessorEditor::timerCallback()
         smoothedShiftUs += emaAlpha * (rawShiftUs - smoothedShiftUs);
     }
 
-    latencyValueLabel.setText ("Latency: " + juce::String (smoothedLatencyMs, 1) + "ms", juce::dontSendNotification);
-    // Fixed 100ms scale: current engines measure 43-50ms (docs/PERFORMANCE_LOG.md),
-    // so this gives visible headroom either side without needing to be
-    // dynamically rescaled.
+    latencyValueLabel.setText (juce::String (smoothedLatencyMs, 1) + "ms", juce::dontSendNotification);
+    // Fixed 100ms scale: current engines measure roughly 20-40ms
+    // (docs/PERFORMANCE_LOG.md), so this gives visible headroom either
+    // side without needing to be dynamically rescaled.
     latencyMeter.setValue (smoothedLatencyMs / 100.0f);
 
     // All three meters share the budget as their scale (rather than each
@@ -417,11 +426,7 @@ void PitchzazzAudioProcessorEditor::resized()
 
     performanceHeaderLabel.setBounds (area.removeFromTop (16));
     area.removeFromTop (8);
-    latencyValueLabel.setBounds (area.removeFromTop (24));
-    area.removeFromTop (4);
-    latencyMeter.setBounds (area.removeFromTop (14));
 
-    area.removeFromTop (16);
     auto layoutStageRow = [&area] (juce::Label& stageLabel, pitchzazz::LevelMeter& meter, juce::Label& valueLabel)
     {
         auto row = area.removeFromTop (20);
@@ -430,6 +435,14 @@ void PitchzazzAudioProcessorEditor::resized()
         meter.setBounds (row.reduced (4, 0));
         area.removeFromTop (6);
     };
+
+    // Same row shape as the three stage rows below (label | meter |
+    // value) — see latencyLabel's doc for why the visual distinction
+    // between "buffering delay" and "compute time" is carried by the
+    // meter's colour and this extra gap, not by a separate caption row.
+    layoutStageRow (latencyLabel, latencyMeter, latencyValueLabel);
+    area.removeFromTop (10);
+
     layoutStageRow (detectLabel, detectMeter, detectValueLabel);
     layoutStageRow (quantizeLabel, quantizeMeter, quantizeValueLabel);
     layoutStageRow (shiftLabel, shiftMeter, shiftValueLabel);

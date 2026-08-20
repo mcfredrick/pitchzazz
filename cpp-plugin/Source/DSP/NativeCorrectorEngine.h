@@ -13,7 +13,7 @@ class NativeCorrectorEngine : public PitchEngine
 public:
     explicit NativeCorrectorEngine (const EngineConfig& config);
 
-    const char* getName() const noexcept override { return "Native C++"; }
+    const char* getName() const noexcept override { return "Phase Vocoder (Native C++)"; }
     void setScale (Scale newScale) noexcept override;
     bool supportsRetuneControls() const noexcept override { return true; }
     void setCorrectionAmount (float amount) noexcept override { corrector.setCorrectionAmount (amount); }

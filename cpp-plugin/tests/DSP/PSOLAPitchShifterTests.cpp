@@ -138,7 +138,7 @@ TEST_CASE ("silence holds the previous period estimate without misbehaving", "[p
     CHECK (rms (output) < 0.01f);
 }
 
-TEST_CASE ("reported latency is pitch-independent, worst-case, and far below the phase vocoder's fixed window", "[psola-shifter]")
+TEST_CASE ("reported latency is pitch-independent and matches the worst-case formula exactly", "[psola-shifter]")
 {
     constexpr double sampleRate = 44100.0;
 
@@ -151,26 +151,29 @@ TEST_CASE ("reported latency is pitch-independent, worst-case, and far below the
     // to, not just the pitch floor alone. Asserting the formula, not just
     // "some small number," so a future change to minHz/grainWidthMultiplierMax/
     // the derivation itself has to consciously update this test rather
-    // than silently pass.
+    // than silently pass. This is a *fixed* worst-case number, not an
+    // adaptive one — it does not get smaller for higher detected pitches
+    // (or a narrower grain-width setting) at runtime (see
+    // getLatencySamples()'s doc for why: a host needs one constant value,
+    // not one that varies block to block).
     constexpr float minHz = 80.0f;
     const int maxPeriodSamples = (int) std::ceil (sampleRate / minHz);
     const int maxHalfWidthSamples = (int) std::ceil ((double) maxPeriodSamples * (double) grainWidthMultiplierMax);
     const int expectedLatency = 2 * maxHalfWidthSamples;
     CHECK (shifter.getLatencySamples() == expectedLatency);
 
-    // The actual headline claim: at 44.1kHz the phase vocoder's window is
-    // ~2048-2206 samples (docs/PERFORMANCE_LOG.md's measured-latency
-    // entry). This is a *fixed* worst-case number, not an adaptive one —
-    // it does not get smaller for higher detected pitches (or a narrower
-    // grain-width setting) at runtime (see getLatencySamples()'s doc for
-    // why: a host needs one constant value, not one that varies block to
-    // block). grainWidthMultiplierMax (1.5x, not something more dramatic)
-    // was chosen specifically to keep this true even in the worst case —
-    // see that constant's own doc for the numbers behind the choice; an
-    // earlier attempt at 3.0x failed exactly this assertion (3312 samples,
-    // worse than the phase vocoder), which is what caught the problem
-    // before it shipped.
-    CHECK (shifter.getLatencySamples() < 2048);
+    // Deliberately NOT also asserting this stays below the phase
+    // vocoder's window (an earlier version of this test did, hardcoded
+    // to "< 2048"): that couples this shifter's own unit test to an
+    // unrelated constant in a different file (PluginProcessor.h's
+    // windowSizeMs), and it kept numerically passing even after
+    // windowSizeMs=30 made the claim false (docs/PERFORMANCE_LOG.md's
+    // 2026-08-19 entry) — false confidence from a test whose *premise*
+    // had silently gone stale, not its assertion. The actual current
+    // cross-engine comparison is tracked as measured data in
+    // docs/ALGORITHMS.md and docs/PERFORMANCE_LOG.md, not as a test
+    // invariant here, since it depends on independent tuning choices in
+    // both engines rather than being a property of this shifter alone.
 }
 
 TEST_CASE ("grain-width multiplier is clamped to its documented range", "[psola-shifter]")

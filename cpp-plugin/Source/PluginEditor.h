@@ -16,18 +16,27 @@
     docs/PERFORMANCE_LOG.md's measured-latency entry) plus a live
     per-stage processing-time breakdown (detect/quantize/shift — this
     *does* sum meaningfully, a genuinely different quantity from latency,
-    see PluginProcessor::getActiveLatencyMs's doc), shown as three
-    separate meters (MeterComponents.h) sharing one scale (the real-time
-    budget) rather than each auto-scaled independently — auto-scaling
-    each meter to its own range would visually equalize stages that are
-    wildly different in magnitude (shift has always dominated detect and
-    quantize by orders of magnitude in this project's own data,
-    docs/PERFORMANCE_LOG.md), which would hide the actual finding instead
-    of showing it. All values shown are smoothed with an exponential
-    moving average — the raw per-block numbers are noisy enough
-    tick-to-tick to be hard to read live otherwise; EMA was chosen over a
-    windowed average because it needs no history buffer and is the same
-    technique real level meters use.
+    see PluginProcessor::getActiveLatencyMs's doc). All four — latency and
+    the three stages — are shown as the same row shape (a name, a
+    LevelMeter, MeterComponents.h, and a value, see layoutStageRow() in
+    resized()), so the UI reads as consistent rather than singling latency
+    out with special-case layout or explanatory caption text; the
+    distinction that latency doesn't sum with the stages below it is
+    carried instead by the latency meter's own colour (magenta vs. the
+    stage meters' cyan/amber/green) and a wider gap before the stage-row
+    group begins. The three stage meters additionally share one scale
+    (the real-time budget) rather than each auto-scaling independently —
+    auto-scaling each meter to its own range would visually equalize
+    stages that are wildly different in magnitude (shift has always
+    dominated detect and quantize by orders of magnitude in this
+    project's own data, docs/PERFORMANCE_LOG.md), which would hide the
+    actual finding instead of showing it; latency keeps its own fixed
+    0-100ms scale since it isn't comparable to the budget at all. All
+    values shown are smoothed with an exponential moving average — the
+    raw per-block numbers are noisy enough tick-to-tick to be hard to
+    read live otherwise; EMA was chosen over a windowed average because
+    it needs no history buffer and is the same technique real level
+    meters use.
 
     Visual style (added 2026-08-17): dark background with neon accent
     colours (`PitchzazzLookAndFeel.h`), replacing JUCE's default grey
@@ -124,8 +133,18 @@ private:
     pitchzazz::CentsMeter detectedCentsMeter;
 
     juce::Label performanceHeaderLabel { {}, "PERFORMANCE" };
-    juce::Label latencyValueLabel { {}, "-" };
+    // Latency is buffering delay (the analysis window's worth of audio
+    // that must accumulate before any output exists at all), not related
+    // to how long process() takes to run — see this file's class doc and
+    // PluginProcessor::getActiveLatencyMs's doc for the full distinction.
+    // Laid out as the same name/meter/value row shape as Detect/Quantize/
+    // Shift below (not a one-off caption row) so it reads as consistent
+    // UI, with the distinction carried by the meter's own colour
+    // (magenta vs. the stage meters' cyan/amber/green) and the row gap
+    // before the stage rows begin, not by explanatory text.
+    juce::Label latencyLabel { {}, "Latency" };
     pitchzazz::LevelMeter latencyMeter;
+    juce::Label latencyValueLabel { {}, "-" };
 
     juce::Label detectLabel { {}, "Detect" };
     pitchzazz::LevelMeter detectMeter;
