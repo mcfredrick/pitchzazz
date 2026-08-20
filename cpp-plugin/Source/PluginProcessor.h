@@ -141,7 +141,19 @@ private:
     static constexpr int correctorBlockSize = 2048;
     static constexpr float ringBufferSeconds = 1.0f;
     static constexpr float startupLatencyMs = 150.0f;
-    static constexpr int windowSizeMs = 50;
+    // Tightened from 50 (2026-08-19): PitchShifter's nearestPowerOfTwo
+    // rounding (PitchShifter.cpp) means anything in ~20-35ms lands on the
+    // same halved frameSize (1024 @ 44.1/48kHz, 2048 @ 96kHz) — a step
+    // function, not a smooth tradeoff, so 30 sits mid-plateau rather than
+    // near either rounding edge. Result: a uniform ~50% latency cut
+    // (46.4ms->23.2ms @ 44.1kHz, 42.7ms->21.3ms @ 48/96kHz), confirmed by
+    // ear (no automated test in this codebase can validate phase-vocoder
+    // reconstruction quality — PitchShifterTests.cpp's own comment says
+    // its check is a loose sanity bound, not a precision assertion).
+    // This also inverted the phase-vocoder-vs-TD-PSOLA latency ordering
+    // this project's docs previously described as fixed — see
+    // docs/ALGORITHMS.md and docs/PERFORMANCE_LOG.md's 2026-08-19 entry.
+    static constexpr int windowSizeMs = 30;
 
     std::unique_ptr<juce::AbstractFifo> inputFifo, outputFifo;
     std::vector<float> inputRingBuffer, outputRingBuffer;

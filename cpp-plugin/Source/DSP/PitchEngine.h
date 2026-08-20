@@ -44,9 +44,10 @@ class PitchEngine
 public:
     virtual ~PitchEngine() = default;
 
-    /// Short, stable, human-readable name for UI display (e.g. "Native
-    /// C++", "Rust (FFI)") — not used for lookup/identity, just display;
-    /// see PitchEngineRegistry for the identity/lookup mechanism.
+    /// Short, stable, human-readable name for UI display (e.g. "Phase
+    /// Vocoder (Native C++)", "Phase Vocoder (Rust FFI)") — not used for
+    /// lookup/identity, just display; see PitchEngineRegistry for the
+    /// identity/lookup mechanism.
     virtual const char* getName() const noexcept = 0;
 
     virtual void setScale (Scale newScale) noexcept = 0;

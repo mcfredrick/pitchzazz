@@ -17,7 +17,7 @@ TEST_CASE ("Rust engine detects a clean sine wave through the FFI bridge", "[rus
     const EngineConfig config { blockSize, sampleRate, 50, Scale { 0, ScaleMode::major } };
     auto engine = createEngine ("rust-ffi", config);
     REQUIRE (engine != nullptr);
-    CHECK (std::string (engine->getName()) == "Rust (FFI)");
+    CHECK (std::string (engine->getName()) == "Phase Vocoder (Rust FFI)");
 
     std::vector<float> signal ((size_t) blockSize);
     for (int i = 0; i < blockSize; ++i)

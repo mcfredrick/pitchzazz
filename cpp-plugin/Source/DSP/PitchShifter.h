@@ -20,12 +20,19 @@ namespace pitchzazz
 class PitchShifter
 {
 public:
-    /// `windowDurationMs` should be ~50ms (matches pitch-cli's
-    /// `PitchCorrector::new(..., 50, ...)` call). The actual internal
-    /// frame size is rounded to the *nearest* power of two — JUCE's FFT
-    /// requires a power-of-two size; rustfft/realfft don't. See the .cpp
-    /// constructor for the resulting frame sizes per sample rate and why
-    /// "nearest" was chosen over "next".
+    /// `windowDurationMs` is a *target*, not the actual latency: the
+    /// internal frame size is rounded to the *nearest* power of two —
+    /// JUCE's FFT requires a power-of-two size; rustfft/realfft don't —
+    /// which makes the true latency a step function of this value, not a
+    /// smooth one (see the .cpp constructor for the resulting frame
+    /// sizes per sample rate and why "nearest" was chosen over "next").
+    /// This project's own production caller (PluginProcessor.h's
+    /// windowSizeMs) no longer matches pitch-cli's `PitchCorrector::new`
+    /// call (still 50ms, crates/pitch-cli/src/main.rs) — tightened to
+    /// 30ms instead after confirming by ear that the resulting halved
+    /// frame size didn't audibly hurt reconstruction quality; see
+    /// docs/ALGORITHMS.md and docs/PERFORMANCE_LOG.md's 2026-08-19 entry
+    /// for why, and for the C++/Rust divergence this created.
     PitchShifter (int windowDurationMs, double sampleRate);
 
     /// `overSampling` trades quality for CPU cost — see pitch-core's

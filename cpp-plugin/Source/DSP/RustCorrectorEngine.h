@@ -23,7 +23,7 @@ class RustCorrectorEngine : public PitchEngine
 public:
     explicit RustCorrectorEngine (const EngineConfig& config);
 
-    const char* getName() const noexcept override { return "Rust (FFI)"; }
+    const char* getName() const noexcept override { return "Phase Vocoder (Rust FFI)"; }
     void setScale (Scale newScale) noexcept override;
     [[nodiscard]] CorrectionResult process (const std::vector<float>& samples, double sampleRate) override;
     [[nodiscard]] int getLatencySamples() const noexcept override { return (int) pitchzazz_rust::latency_samples (*corrector); }

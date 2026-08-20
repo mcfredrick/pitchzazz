@@ -26,26 +26,27 @@ namespace pitchzazz
 // could ever be set to, not just whatever it happens to be set to right
 // now). A first pass at 3.0x was caught by
 // tests/DSP/PSOLAPitchShifterTests.cpp's latency-formula test: it pushes
-// worst-case latency to ~75ms at 44.1/48kHz — *worse* than the phase
-// vocoder's ~42.7-46.4ms (docs/PERFORMANCE_LOG.md), which would silently
-// defeat this entire engine's reason for existing (the latency win over
-// the phase vocoder, docs/ROADMAP.md's original framing for building
-// TD-PSOLA at all) the moment a user so much as sees this control exists,
-// regardless of what they actually set it to. 1.5x keeps worst-case
-// latency at ~37.5ms — still a real, meaningful reduction versus the
-// phase vocoder (consistent with the ~19%/~12% net reduction this
-// project already accepted as legitimate after the crossfade fix cost
-// latency back, docs/PERFORMANCE_LOG.md's "tighter floor" entry) — a
-// deliberately narrower creative range than a first instinct might pick,
-// chosen specifically to protect that latency budget rather than to
-// maximize textural range. The lower bound doesn't have this problem
-// (narrowing the grain only ever reduces the worst case), so it's the
-// ordinary "no listening-test tooling exists to validate a precise
-// number" judgment call the rest of this codebase's creative-control
-// ranges already use (overSampling, retuneSpeedMs). 1.0x — today's fixed
-// behaviour — sits inside the resulting [0.5, 1.5] range, not at an edge.
+// worst-case latency to ~75ms at 44.1/48kHz, and 1.5x was chosen instead
+// to keep worst-case latency at ~37.5ms — at the time, a real, meaningful
+// reduction versus the phase vocoder's then-~42.7-46.4ms window
+// (docs/ROADMAP.md's original framing for building TD-PSOLA at all: a
+// latency win over the phase vocoder).
+//
+// EXPERIMENTAL (2026-08-19): was 1.5. That framing no longer holds after
+// PluginProcessor.h's windowSizeMs was independently tightened
+// (50ms->30ms), cutting the phase vocoder to ~21-23ms and leaving PSOLA
+// at 1.5x (~37.5ms) *higher*-latency than the engine it was originally
+// built to beat — see docs/ALGORITHMS.md and docs/PERFORMANCE_LOG.md's
+// 2026-08-19 entry for the full story. minHz (below) is a correctness
+// floor tied to real bass-vocal fundamentals, not just a latency knob,
+// so it isn't touched here. 1.25x brings worst-case latency to ~31ms —
+// not lower than the phase vocoder's new number, but a real ~17% cut
+// from 37.5ms — while still leaving the creative control room to widen
+// the grain above its 1.0x default, unlike 1.0x (which would leave no
+// "wider" range at all). Pending a real listening test before this is a
+// committed default, same caveat as the 1.5x choice originally had.
 constexpr float grainWidthMultiplierMin = 0.5f;
-constexpr float grainWidthMultiplierMax = 1.5f;
+constexpr float grainWidthMultiplierMax = 1.25f;
 
 /// Time-Domain Pitch-Synchronous Overlap-Add (TD-PSOLA) pitch shifter —
 /// the algorithm family real low-latency vocal-effects hardware/plugins

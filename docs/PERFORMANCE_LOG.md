@@ -715,3 +715,108 @@ not treated as equivalent to having measured it — this codebase's own
 "measurement over argument where practical" standard, same caveat this
 log has used before when a derivation was solid but not yet independently
 re-verified after a formula change.
+
+---
+
+## 2026-08-19 — Phase-vocoder window tightened; TD-PSOLA's latency lead inverted
+
+Context: a UI-clarity question about the "Latency" display (why it can't
+be decomposed into the per-stage compute-time meters) led to actually
+looking at *why* the phase vocoder's latency was what it was —
+`PitchShifter.cpp`'s `computeFrameSize` rounds `windowSizeMs` to the
+**nearest power of two**, a step function, not a smooth tradeoff. That
+raised the obvious question: was `windowSizeMs = 50` sitting well inside
+a rounding plateau, or right at a boundary where a small change would
+buy a real win?
+
+**Data — deterministic, from the documented formula** (no build needed
+for this part):
+
+| `windowSizeMs` | frameSize (nearest pow2) | 44.1kHz | 48kHz | 96kHz |
+|---|---|---|---|---|
+| 50 (old) | 2048 / 2048 / 4096 | 46.44ms | 42.67ms | 42.67ms |
+| 20-35 (plateau) | 1024 / 1024 / 2048 | 23.22ms | 21.33ms | 21.33ms |
+
+Any value from ~20-35ms lands on the identical halved frame size — the
+whole range is one plateau below the 50ms one, with the rounding
+boundary sitting at ~32ms. 30 was chosen to sit mid-plateau rather than
+near either edge.
+
+**Confirmation:** built the Standalone app with `windowSizeMs = 30`
+(`PluginProcessor.h`) and listened on real vocal input across both
+phase-vocoder engines — user-confirmed "sounds fine." No automated test
+in this codebase can validate phase-vocoder reconstruction quality
+(`PitchShifterTests.cpp`'s own comment says its check is a loose sanity
+bound, not a precision assertion), so this is real-time listening again
+being the only tool that actually catches this artifact class, same
+lesson `docs/FINDINGS.md` has already logged more than once for PSOLA.
+**Shipped**, 50→30.
+
+**Side effect discovered during the same pass:** the Rust FFI engine's
+phase vocoder derives its frame size completely differently —
+`crates/pitch-core/src/corrector.rs` rounds `sampleRate · windowMs /
+1000` up to the nearest *even* number, a near-continuous function, not
+C++'s step function. Same nominal `windowSizeMs = 30` therefore produces
+different real latency on the two engines:
+
+| Engine | 44.1kHz | 48kHz | 96kHz |
+|---|---|---|---|
+| Native C++ (nearest pow2) | 23.22ms | 21.33ms | 21.33ms |
+| Rust FFI (round to even) | 30.02ms | 30.00ms | 30.00ms |
+
+This divergence already existed at `windowSizeMs = 50` (46.4ms vs.
+50.0ms, a ~7% gap — see this log's "Rust-vs-C++ per-block cost" entry
+above) but was easy to describe informally as "about the same." At 30ms
+the gap is ~29% (30.0ms vs. 23.2ms) precisely because C++'s step function
+had a full octave of room to drop (2048→1024) while Rust's rounding just
+tracked the target down linearly. Full mechanism explained in
+`docs/ALGORITHMS.md`'s phase-vocoder section — both engines' display
+names were changed from "Native C++"/"Rust (FFI)" to "Phase Vocoder
+(Native C++)"/"Phase Vocoder (Rust FFI)" in the same pass, since which
+*algorithm* each engine runs is now directly relevant to reading the
+latency display, not just an implementation detail.
+
+**Bigger consequence: this inverted the phase-vocoder-vs-TD-PSOLA latency
+ordering.** TD-PSOLA's latency doesn't depend on `windowSizeMs` at all —
+it has independent tuning knobs (`minHz`, `grainWidthMultiplierMax`) —
+so tightening only the phase vocoder's window was enough to flip which
+engine is lower-latency by default:
+
+| Engine | 44.1kHz | 48kHz |
+|---|---|---|
+| Phase vocoder (was) | 46.44ms | 42.67ms |
+| Phase vocoder (now) | 23.22ms | 21.33ms |
+| TD-PSOLA (unchanged, `minHz=80`, `grainWidthMultiplierMax=1.5`) | 37.55ms | 37.50ms |
+
+TD-PSOLA was originally built specifically *because* it was the
+lower-latency engine (`docs/ROADMAP.md`'s original framing) — that
+framing no longer holds against the tightened phase vocoder. Decision
+(user-directed, 2026-08-19): document the inversion as a genuine finding
+rather than either (a) silently re-tuning PSOLA back into the lead, or
+(b) reverting the phase-vocoder change to preserve the old narrative.
+The interesting story is that the ordering was never an algorithmic
+constant — it was always a function of independent tuning choices on
+both sides, and this is direct, measured evidence of that rather than an
+assertion of it.
+
+**Follow-up explored in the same pass: can TD-PSOLA go lower too?**
+`minHz` (80Hz) is a documented correctness floor — "the bottom of a
+typical bass vocal's fundamental" — not just a latency knob, so it
+wasn't touched. `grainWidthMultiplierMax` only trades away creative-
+control range (no correctness cost), so it was the lever pulled:
+
+| `grainWidthMultiplierMax` | 44.1kHz | 48kHz | vs. old 1.5x |
+|---|---|---|---|
+| 1.5 (old) | 37.55ms | 37.50ms | — |
+| 1.25 (experimental, pending listening) | 31.29ms | 31.25ms | ~17% lower |
+| 1.0 (not chosen) | 25.03ms | 25.00ms | ~33% lower, but removes all "widen" headroom above the 1.0x default |
+
+1.25 was picked over 1.0 specifically to leave the creative control some
+room to widen the grain above its default, at the cost of a smaller
+latency win. Built alongside the phase-vocoder change for the same
+listening session; **pending confirmation** — not yet a committed
+default, same caveat `windowSizeMs` had before this session's listening
+pass confirmed it. Does not fully reclaim TD-PSOLA's latency lead over
+the now-tightened phase vocoder (31ms vs. 21-23ms) — see
+`docs/ALGORITHMS.md` for why `minHz` was deliberately left alone rather
+than pushed further to try to close that remaining gap.
