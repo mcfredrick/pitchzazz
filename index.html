@@ -166,15 +166,16 @@
   /* ---------- acronym tooltips ---------- */
   abbr.ac{
     text-decoration:none; border-bottom:1px dotted var(--ink-dim);
-    cursor:help; position:relative; font:inherit;
+    cursor:help; position:relative; font:inherit; text-transform:none;
   }
   abbr.ac:hover, abbr.ac:focus-visible{ border-bottom-color:var(--ink); outline:none; }
   abbr.ac:hover::after, abbr.ac:focus-visible::after{
     content:attr(data-tip);
     position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%);
     background:var(--panel-raised); color:var(--ink); border:1px solid var(--line);
-    padding:6px 11px; border-radius:7px; font-family:var(--mono); font-size:11.5px;
-    font-weight:600; white-space:nowrap; z-index:30; pointer-events:none;
+    padding:9px 13px; border-radius:8px; font-family:var(--mono); font-size:11.5px;
+    font-weight:500; line-height:1.5; white-space:normal; width:max-content;
+    max-width:min(300px, 80vw); text-align:left; z-index:30; pointer-events:none;
     box-shadow:0 8px 24px rgba(0,0,0,0.45);
   }
   abbr.ac:hover::before, abbr.ac:focus-visible::before{
@@ -216,7 +217,7 @@
   .demo-controls input[type="range"]:focus-visible{ outline:2px solid var(--magenta); outline-offset:3px; }
   .demo-readout{
     font-family:var(--mono); font-size:14px; color:var(--magenta);
-    min-width:150px; text-align:right; font-variant-numeric:tabular-nums;
+    width:29ch; flex:none; text-align:right; font-variant-numeric:tabular-nums;
   }
 
   /* ---------- comparison table ---------- */
@@ -273,9 +274,9 @@
 <div class="wrap">
 
   <header class="hero">
-    <div class="eyebrow">field notes &middot; DSP mechanisms</div>
+    <div class="eyebrow">field notes &middot; <abbr class="ac" tabindex="0" data-tip="Digital Signal Processing — the math that manipulates an audio signal: detection, filtering, shifting">DSP</abbr> mechanisms</div>
     <h1>How pitchzazz <span class="lit">actually</span> hears<br>and re-pitches a voice</h1>
-    <p class="lede">Three DSP stages run on every audio block, in order: <em>detect</em> the pitch, <em>quantize</em>
+    <p class="lede">Three <abbr class="ac" tabindex="0" data-tip="Digital Signal Processing — the math that manipulates an audio signal: detection, filtering, shifting">DSP</abbr> stages run on every audio block, in order: <em>detect</em> the pitch, <em>quantize</em>
       it to the nearest note in scale, <em>shift</em> the signal to that note &mdash; wrapped in a real-time
       <em>engine</em> that has to keep those three stages fed without ever glitching, and a <em>hot-swap</em>
       mechanism that can change which shift algorithm is running mid-performance. This notebook is the mechanism
@@ -284,11 +285,11 @@
     <div class="chip-row">
       <span class="chip">lock-free ring buffers</span>
       <span class="chip">McLeod Pitch Method</span>
-      <span class="chip"><abbr class="ac" tabindex="0" data-tip="Normalized Square Difference Function">NSDF</abbr> autocorrelation</span>
+      <span class="chip"><abbr class="ac" tabindex="0" data-tip="Normalized Square Difference Function — a normalized autocorrelation curve, bounded to [−1,1], so peaks are comparable at every lag">NSDF</abbr> autocorrelation</span>
       <span class="chip">nearest-in-scale search</span>
-      <span class="chip"><abbr class="ac" tabindex="0" data-tip="Short-Time Fourier Transform">STFT</abbr> phase vocoder</span>
-      <span class="chip">TD-<abbr class="ac" tabindex="0" data-tip="Pitch-Synchronous Overlap-Add">PSOLA</abbr></span>
-      <span class="chip"><abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add">WSOLA</abbr> + varispeed resample</span>
+      <span class="chip"><abbr class="ac" tabindex="0" data-tip="Short-Time Fourier Transform — repeated FFTs over overlapping windows, used to track how frequency content changes over time">STFT</abbr> phase vocoder</span>
+      <span class="chip"><abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add — shifts pitch by re-spacing time-domain grains at pitch marks, not by touching frequency content">TD-PSOLA</abbr></span>
+      <span class="chip"><abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add — time-stretches audio by splicing overlapping windows at the best-correlated offset, not a fixed hop">WSOLA</abbr> + varispeed resample</span>
       <span class="chip">atomic hot-swap</span>
     </div>
   </header>
@@ -300,7 +301,7 @@
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--magenta)"><span class="dot" style="background:var(--magenta)"></span>00 &middot; engine</div>
       <h2>The real-time engine: why nothing above is allowed to block</h2>
-      <p>The OS calls the audio callback on a hard deadline &mdash; one buffer's worth of time. Miss it once and
+      <p>The <abbr class="ac" tabindex="0" data-tip="Operating System">OS</abbr> calls the audio callback on a hard deadline &mdash; one buffer's worth of time. Miss it once and
         it drops audio: a glitch, not a slow frame. So the callback does <strong>exactly one thing</strong>: push
         or pop a lock-free queue. Detect, quantize, and shift all happen on a separate worker thread that has
         no deadline and is free to allocate, lock, or block.</p>
@@ -319,7 +320,7 @@
 
           <rect x="245" y="120" width="110" height="60" rx="9" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
           <text x="300" y="146" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">ring buffer</text>
-          <text x="300" y="160" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">lock-free FIFO<title>FIFO: First In, First Out</title></text>
+          <text x="300" y="160" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">lock-free FIFO<title>FIFO: First In, First Out — a queue read out in the same order it was written</title></text>
 
           <rect x="400" y="55" width="260" height="180" rx="12" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4" stroke-dasharray="3 4"/>
           <text x="530" y="76" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" letter-spacing="0.06em" fill="#8a8d9c">WORKER THREAD &middot; NO DEADLINE</text>
@@ -332,7 +333,7 @@
 
           <rect x="705" y="120" width="110" height="60" rx="9" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
           <text x="760" y="146" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">ring buffer</text>
-          <text x="760" y="160" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">lock-free FIFO<title>FIFO: First In, First Out</title></text>
+          <text x="760" y="160" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">lock-free FIFO<title>FIFO: First In, First Out — a queue read out in the same order it was written</title></text>
 
           <text x="880" y="150" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#8a8d9c">out</text>
 
@@ -358,14 +359,14 @@
       <div class="mc-label">why each one is fatal</div>
       <div class="math-line"><span class="k">block</span><span class="v">a mutex, file I/O, or sleep &mdash; the callback simply doesn't return in time, no matter how briefly it was going to block for</span></div>
       <div class="math-line"><span class="k">allocate</span><span class="v"><code>new</code>, a growing <code>Vec</code>/<code>vector</code> &mdash; the allocator can itself take an internal lock or walk a free list; worst case is unbounded, not "usually fast"</span></div>
-      <div class="math-line"><span class="k">lock</span><span class="v">any mutex, even uncontended &mdash; if the other side is ever preempted while holding it, the audio thread stalls waiting on a thread the OS isn't scheduling</span></div>
+      <div class="math-line"><span class="k">lock</span><span class="v">any mutex, even uncontended &mdash; if the other side is ever preempted while holding it, the audio thread stalls waiting on a thread the <abbr class="ac" tabindex="0" data-tip="Operating System">OS</abbr> isn't scheduling</span></div>
       <div class="cite"><a href="https://github.com/mcfredrick/pitchzazz/blob/3d859da3812cef37c848b83cb15d0ffbecaafd4b/cpp-plugin/Source/PluginProcessor.cpp#L171" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3H3v10h10v-3M9 3h4v4M13 3L7 9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>PluginProcessor.cpp<span class="sha">:171 @ 3d859da</span></a></div>
     </div>
 
     <div class="sub-card on-green" style="border-left-color:var(--magenta)">
       <h3>Block-size decoupling <span class="full-name">&mdash; the host doesn't owe you a fixed size</span></h3>
-      <p>The detector needs a fixed-size block (2048 samples) to run its <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform">FFT</abbr> against. Audio hosts don't
-        guarantee one &mdash; a DAW can hand the callback 64, 128, or 512 samples depending on its own buffer
+      <p>The detector needs a fixed-size block (2048 samples) to run its <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform — converts a signal between the time and frequency domains in O(N log N)">FFT</abbr> against. Audio hosts don't
+        guarantee one &mdash; a <abbr class="ac" tabindex="0" data-tip="Digital Audio Workstation — the host app (Ableton Live, etc.) that loads the plugin">DAW</abbr> can hand the callback 64, 128, or 512 samples depending on its own buffer
         setting, and that size can even change mid-session.</p>
 
       <figure>
@@ -440,7 +441,7 @@
     <figure>
       <div class="fig-frame">
         <svg viewBox="0 0 900 300" role="img" aria-label="A windowed audio block is autocorrelated via FFT, then normalized into the NSDF curve. The trivial zero-lag peak is skipped; the first peak past it that clears the clarity threshold is refined by quadratic interpolation into the detected period.">
-          <text x="20" y="28" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">NSDF(&#964;) &mdash; normalized square difference, one analysis block<title>NSDF: Normalized Square Difference Function</title></text>
+          <text x="20" y="28" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">NSDF(&#964;) &mdash; normalized square difference, one analysis block<title>NSDF: Normalized Square Difference Function — normalized autocorrelation, bounded to [−1,1]</title></text>
 
           <!-- axes -->
           <line x1="60" y1="230" x2="860" y2="230" stroke="#2c3140" stroke-width="1.4"/>
@@ -472,18 +473,18 @@
         </svg>
       </div>
       <figcaption>This curve is the match score from the demo above, computed at <em>every</em> &tau; at once (via
-        <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform">FFT</abbr>, not by literally sliding and
-        re-measuring one &tau; at a time) and normalized into NSDF. Note what's <em>not</em> here: no window taper is applied before this autocorrelation &mdash; unlike
-        the shift stage below, <abbr class="ac" tabindex="0" data-tip="McLeod Pitch Method">MPM</abbr> runs on the raw fixed-size block. The energy gate (not drawn) skips this whole
+        <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform — converts a signal between the time and frequency domains in O(N log N)">FFT</abbr>, not by literally sliding and
+        re-measuring one &tau; at a time) and normalized into <abbr class="ac" tabindex="0" data-tip="Normalized Square Difference Function — a normalized autocorrelation curve, bounded to [−1,1], so peaks are comparable at every lag">NSDF</abbr>. Note what's <em>not</em> here: no window taper is applied before this autocorrelation &mdash; unlike
+        the shift stage below, <abbr class="ac" tabindex="0" data-tip="McLeod Pitch Method — a modified-autocorrelation pitch detector built around the NSDF">MPM</abbr> runs on the raw fixed-size block. The energy gate (not drawn) skips this whole
         computation on silence.</figcaption>
     </figure>
 
     <div class="math-card cyan">
       <div class="mc-label">the math</div>
       <div class="math-line"><span class="k">energy gate</span><span class="v">E&nbsp;=&nbsp;&Sigma;&nbsp;x[n]&sup2;&nbsp;&mdash;&nbsp;skip the block entirely if E &lt; 0.15</span></div>
-      <div class="math-line"><span class="k">autocorrelation</span><span class="v"><abbr class="ac" tabindex="0" data-tip="Autocorrelation Function">ACF</abbr>(&#964;) = <abbr class="ac" tabindex="0" data-tip="Inverse Fast Fourier Transform">IFFT</abbr>( |<abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform">FFT</abbr>(x)|&sup2; )&nbsp;&mdash;&nbsp;Wiener&ndash;Khinchin, O(N log N) instead of O(N&sup2;)</span></div>
+      <div class="math-line"><span class="k">autocorrelation</span><span class="v"><abbr class="ac" tabindex="0" data-tip="Autocorrelation Function — how well a signal matches a delayed copy of itself, at a given lag">ACF</abbr>(&#964;) = <abbr class="ac" tabindex="0" data-tip="Inverse Fast Fourier Transform — the FFT run backward, frequency domain to time domain">IFFT</abbr>( |<abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform — converts a signal between the time and frequency domains in O(N log N)">FFT</abbr>(x)|&sup2; )&nbsp;&mdash;&nbsp;Wiener&ndash;Khinchin, O(N log N) instead of O(N&sup2;)</span></div>
       <div class="math-line"><span class="k">energy term</span><span class="v">m(&#964;) = &Sigma; x[n]&sup2; + &Sigma; x[n+&#964;]&sup2;&nbsp;&nbsp;(left window energy + right window energy)</span></div>
-      <div class="math-line"><span class="k"><abbr class="ac" tabindex="0" data-tip="Normalized Square Difference Function">NSDF</abbr></span><span class="v">nsdf(&#964;) = 2&middot;ACF(&#964;) / m(&#964;)&nbsp;&mdash;&nbsp;bounded to [&minus;1, 1], comparable across every &#964;</span></div>
+      <div class="math-line"><span class="k"><abbr class="ac" tabindex="0" data-tip="Normalized Square Difference Function — a normalized autocorrelation curve, bounded to [−1,1], so peaks are comparable at every lag">NSDF</abbr></span><span class="v">nsdf(&#964;) = 2&middot;<abbr class="ac" tabindex="0" data-tip="Autocorrelation Function — how well a signal matches a delayed copy of itself, at a given lag">ACF</abbr>(&#964;) / m(&#964;)&nbsp;&mdash;&nbsp;bounded to [&minus;1, 1], comparable across every &#964;</span></div>
       <div class="math-line"><span class="k">peak choice</span><span class="v">first &#964; past the initial positive run where nsdf(&#964;) &gt; 0.1 &mdash; <em>not</em> the tallest peak</span></div>
       <div class="math-line"><span class="k">sub-sample refine</span><span class="v">fit a parabola through (&minus;1,y&#8320;), (0,y&#8321;), (1,y&#8322;) around the peak, solve the vertex</span></div>
       <div class="cite"><a href="https://github.com/mcfredrick/pitchzazz/blob/3d859da3812cef37c848b83cb15d0ffbecaafd4b/cpp-plugin/Source/DSP/PitchDetector.cpp#L181" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3H3v10h10v-3M9 3h4v4M13 3L7 9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>PitchDetector.cpp<span class="sha">:181 @ 3d859da</span></a></div>
@@ -570,7 +571,7 @@
     <!-- ---- Phase Vocoder ---- -->
     <div class="sub-card on-green">
       <h3>Phase Vocoder <span class="full-name">&mdash; frequency domain</span></h3>
-      <p>Take the signal into the frequency domain with an <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform">FFT</abbr>, then move each bin's content to a new bin
+      <p>Take the signal into the frequency domain with an <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform — converts a signal between the time and frequency domains in O(N log N)">FFT</abbr>, then move each bin's content to a new bin
         scaled by the pitch ratio. Relocating spectral content <strong>is</strong> the pitch shift; the phase
         math below exists purely to make that relocation sound coherent instead of smeared.</p>
 
@@ -638,8 +639,8 @@
 
     <!-- ---- TD-PSOLA ---- -->
     <div class="sub-card on-green">
-      <h3><abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add">TD-PSOLA</abbr> <span class="full-name">&mdash; time domain, grain-based</span></h3>
-      <p>No <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform">FFT</abbr> at all. Cut the signal into small windowed grains, one centered on each detected pitch period,
+      <h3><abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add — shifts pitch by re-spacing time-domain grains at pitch marks, not by touching frequency content">TD-PSOLA</abbr> <span class="full-name">&mdash; time domain, grain-based</span></h3>
+      <p>No <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform — converts a signal between the time and frequency domains in O(N log N)">FFT</abbr> at all. Cut the signal into small windowed grains, one centered on each detected pitch period,
         then paste those grains back down at new positions &mdash; closer together to raise pitch, farther
         apart to lower it. Each grain's own content never changes, only its <strong>spacing</strong> does.</p>
 
@@ -688,17 +689,17 @@
 
     <!-- ---- Varispeed + WSOLA ---- -->
     <div class="sub-card on-green">
-      <h3>Varispeed + <abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add">WSOLA</abbr> <span class="full-name">&mdash; stretch, then resample</span></h3>
+      <h3>Varispeed + <abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add — time-stretches audio by splicing overlapping windows at the best-correlated offset, not a fixed hop">WSOLA</abbr> <span class="full-name">&mdash; stretch, then resample</span></h3>
       <p>The odd one out: this engine changes pitch by genuinely changing playback rate, the same physical
         effect as varispeed-ing a tape reel &mdash; formants shift right along with it, on purpose. Two stages,
-        in this order: <strong><abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add">WSOLA</abbr></strong> time-stretches the signal by the shift ratio first (pitch-preserving,
+        in this order: <strong><abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add — time-stretches audio by splicing overlapping windows at the best-correlated offset, not a fixed hop">WSOLA</abbr></strong> time-stretches the signal by the shift ratio first (pitch-preserving,
         duration-changing), then a <strong>resample</strong> restores the original duration, which is what
         actually moves the pitch.</p>
 
       <figure>
         <div class="fig-frame">
           <svg viewBox="0 0 900 190" role="img" aria-label="WSOLA searches a radius around the nominal next window position for the offset whose content best correlates with the previously placed window, then splices there instead of at a fixed hop.">
-            <text x="20" y="24" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">WSOLA splice search &mdash; correlate candidate offsets against the reference tail<title>WSOLA: Waveform Similarity Overlap-Add</title></text>
+            <text x="20" y="24" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">WSOLA splice search &mdash; correlate candidate offsets against the reference tail<title>WSOLA: Waveform Similarity Overlap-Add — splices overlapping windows at the best-correlated offset</title></text>
             <line x1="40" y1="110" x2="860" y2="110" stroke="#2c3140" stroke-width="1.4"/>
             <rect x="120" y="88" width="140" height="44" rx="6" fill="#1b1e27" stroke="#f1f1f6" stroke-width="1.6"/>
             <text x="190" y="114" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">reference (placed)</text>
@@ -739,8 +740,8 @@
 
       <div class="math-card green">
         <div class="mc-label">the math</div>
-        <div class="math-line"><span class="k">splice score</span><span class="v"><abbr class="ac" tabindex="0" data-tip="Normalized Cross-Correlation">NCC</abbr>(offset) = &Sigma;(a&middot;b) / &radic;(&Sigma;a&sup2; &middot; &Sigma;b&sup2;)&nbsp;&mdash;&nbsp;normalized cross-correlation, capped to a 256-sample window</span></div>
-        <div class="math-line"><span class="k">deviate only if</span><span class="v">NCC(offset) &gt; NCC(0) + 0.02 &mdash; a hard margin, not a soft distance penalty</span></div>
+        <div class="math-line"><span class="k">splice score</span><span class="v"><abbr class="ac" tabindex="0" data-tip="Normalized Cross-Correlation — a similarity score between two signals, normalized to [−1,1] regardless of loudness">NCC</abbr>(offset) = &Sigma;(a&middot;b) / &radic;(&Sigma;a&sup2; &middot; &Sigma;b&sup2;)&nbsp;&mdash;&nbsp;normalized cross-correlation, capped to a 256-sample window</span></div>
+        <div class="math-line"><span class="k">deviate only if</span><span class="v"><abbr class="ac" tabindex="0" data-tip="Normalized Cross-Correlation — a similarity score between two signals, normalized to [−1,1] regardless of loudness">NCC</abbr>(offset) &gt; <abbr class="ac" tabindex="0" data-tip="Normalized Cross-Correlation — a similarity score between two signals, normalized to [−1,1] regardless of loudness">NCC</abbr>(0) + 0.02 &mdash; a hard margin, not a soft distance penalty</span></div>
         <div class="math-line"><span class="k">resample</span><span class="v">p(t) = 0.5&middot;[2p&#8321; + (p&#8322;&minus;p&#8320;)t + (2p&#8320;&minus;5p&#8321;+4p&#8322;&minus;p&#8323;)t&sup2; + (3p&#8321;&minus;3p&#8322;+p&#8323;&minus;p&#8320;)t&sup3;]</span></div>
         <div class="math-line"><span class="k">read rate</span><span class="v">read position advances by shift = 2^(semitoneShift/12) samples per output sample</span></div>
         <div class="cite"><a href="https://github.com/mcfredrick/pitchzazz/blob/3d859da3812cef37c848b83cb15d0ffbecaafd4b/cpp-plugin/Source/DSP/VarispeedShifter.cpp#L13" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3H3v10h10v-3M9 3h4v4M13 3L7 9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>VarispeedShifter.cpp<span class="sha">:13 @ 3d859da</span></a></div>
@@ -751,9 +752,9 @@
       <table class="compare-table">
         <thead><tr><th>engine</th><th>domain</th><th>what actually moves</th><th>latency behavior</th></tr></thead>
         <tbody>
-          <tr><td><span class="swatch" style="background:var(--green)"></span>Phase Vocoder</td><td>frequency</td><td><abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform">FFT</abbr> bin position</td><td>fixed &mdash; a step function of the analysis window</td></tr>
-          <tr><td><span class="swatch" style="background:var(--green)"></span><abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add">TD-PSOLA</abbr></td><td>time</td><td>grain spacing</td><td>scales with pitch period, not window size</td></tr>
-          <tr><td><span class="swatch" style="background:var(--green)"></span>Varispeed+<abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add">WSOLA</abbr></td><td>time (rate)</td><td>playback speed</td><td>fixed, ratio-independent by design</td></tr>
+          <tr><td><span class="swatch" style="background:var(--green)"></span>Phase Vocoder</td><td>frequency</td><td><abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform — converts a signal between the time and frequency domains in O(N log N)">FFT</abbr> bin position</td><td>fixed &mdash; a step function of the analysis window</td></tr>
+          <tr><td><span class="swatch" style="background:var(--green)"></span><abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add — shifts pitch by re-spacing time-domain grains at pitch marks, not by touching frequency content">TD-PSOLA</abbr></td><td>time</td><td>grain spacing</td><td>scales with pitch period, not window size</td></tr>
+          <tr><td><span class="swatch" style="background:var(--green)"></span>Varispeed+<abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add — time-stretches audio by splicing overlapping windows at the best-correlated offset, not a fixed hop">WSOLA</abbr></td><td>time (rate)</td><td>playback speed</td><td>fixed, ratio-independent by design</td></tr>
         </tbody>
       </table>
     </div>
@@ -769,7 +770,7 @@
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--magenta)"><span class="dot" style="background:var(--magenta)"></span>04 &middot; hot-swap</div>
       <h2>Changing engines live, with no dropout</h2>
-      <p>Switching from the phase vocoder to <abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add">TD-PSOLA</abbr> mid-performance can't pause audio to do it. The handoff
+      <p>Switching from the phase vocoder to <abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add — shifts pitch by re-spacing time-domain grains at pitch marks, not by touching frequency content">TD-PSOLA</abbr> mid-performance can't pause audio to do it. The handoff
         is <strong>one atomic pointer exchange</strong>, picked up by the worker thread between blocks &mdash;
         never mid-<code>process()</code> &mdash; and the outgoing engine's warmed-up internal state gets
         cross-faded out instead of just discarded.</p>
@@ -781,7 +782,7 @@
           <text x="20" y="24" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">atomic pointer handoff, picked up between blocks &mdash; never mid-process()</text>
 
           <rect x="20" y="70" width="140" height="64" rx="9" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
-          <text x="90" y="97" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">UI: pick engine</text>
+          <text x="90" y="97" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">UI: pick engine<title>UI: User Interface</title></text>
           <text x="90" y="112" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">message thread</text>
 
           <rect x="205" y="70" width="170" height="64" rx="9" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
@@ -827,7 +828,7 @@
 
   <footer>
     <span>pitchzazz &middot; three stages, three engines, one signal chain</span>
-    <span>colors match the plugin's actual UI palette &mdash; <code>PitchzazzLookAndFeel.h</code></span>
+    <span>colors match the plugin's actual <abbr class="ac" tabindex="0" data-tip="User Interface">UI</abbr> palette &mdash; <code>PitchzazzLookAndFeel.h</code></span>
   </footer>
 
 </div>
