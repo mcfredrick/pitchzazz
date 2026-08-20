@@ -715,3 +715,106 @@ not treated as equivalent to having measured it — this codebase's own
 "measurement over argument where practical" standard, same caveat this
 log has used before when a derivation was solid but not yet independently
 re-verified after a formula change.
+
+## 2026-08-19 — Varispeed engine: O(sampleRate²) WSOLA search cost, found via live 96kHz testing
+
+**Setup:** New third-algorithm engine (`VarispeedResampler` + `WSOLATimeStretcher`,
+see `docs/ARCHITECTURE.md`-adjacent doc comments on both classes), built
+and run live in the Standalone app for the first time — not caught by any
+of the unit tests written alongside it, since none of them exercised a
+non-default sample rate.
+
+**Finding:** live at 96kHz, block 2048 (21,333.3us budget), the plugin's
+own performance panel showed:
+
+| stage | cost |
+|---|---|
+| detect | 213.7us |
+| quantize | 1.0us |
+| shift | 26,101.1us |
+| **total** | **26,315.8us — 23% over budget** |
+
+Audibly, this presented as constant dropouts ("missing buffers") — the
+worker thread structurally could not keep up, so the output ring buffer
+underran every block, same failure mode this log's very first entry
+documented for the original Rust prototype.
+
+**Root cause:** `WSOLATimeStretcher::searchBestOffset` correlated the
+*entire* `synthesisHopSamples`-length overlap region at every one of
+`2*searchRadiusSamples+1` candidate offsets. Both `synthesisHopSamples`
+and `searchRadiusSamples` are derived from `windowSizeSamples`, itself
+`sampleRate`-derived — so total search cost scaled as
+`O(searchRadius × correlationLength) = O(sampleRate × sampleRate) =
+O(sampleRate²)`, not `O(sampleRate)` the way every other per-block cost in
+this codebase does. Invisible at 44.1kHz (where it was written and
+tested); at 96kHz the (96/44.1)² ≈ 4.7x multiplier pushed it over budget.
+Not caught by design review — flagged in the implementation plan as
+"needs a real benchmark before shipping," but shipped before that
+benchmark was actually run at a non-44.1kHz rate.
+
+**Fix:** capped the correlation length to a fixed constant
+(`maxCorrelationLengthSamples = 256`), independent of sample rate, instead
+of the full overlap region — a short reference snippet is sufficient to
+find a good splice offset; it doesn't need to cover the whole overlap.
+This turns search cost back to `O(searchRadiusSamples)` — linear, matching
+every other engine's scaling.
+
+**Data — `benchmarks/VarispeedCorrectorPerformance.cpp`, after the fix:**
+
+| Sample rate | Release | Debug |
+|---|---|---|
+| 44100Hz | ~802us | not re-measured (Release is the meaningful number) |
+| 48000Hz | ~805us | not re-measured |
+| 96000Hz | ~791us | 7,255us |
+
+Release cost is now flat (~800us) across all three rates — direct
+confirmation the fix removed the sample-rate-dependent blowup, not just
+reduced it. Debug-at-96kHz (7.26ms) is what the live-tested Standalone app
+actually runs; still ~9x Release's cost (consistent with this project's
+standing caveat that Debug/-O0 numbers aren't directly comparable to
+Release), but now comfortably under the 21.3ms budget (~34%) instead of
+23% over it — the fix alone, before any Debug/Release consideration, is
+roughly a 3.6x improvement (26.3ms → 7.3ms) at the exact scenario that was
+audibly failing.
+
+**Not yet done:** Release-build live/Standalone re-verification by ear at
+96kHz (only the offline benchmark and the Debug Standalone app have been
+re-checked so far); a systematic sweep of `maxCorrelationLengthSamples`
+against splice-quality (does 256 samples correlate as well as the old
+full-overlap-region comparison did, or did this trade quality for speed
+in a way that needs its own listening pass) — flagged, not assumed
+equivalent just because the budget numbers now pass.
+
+## 2026-08-19 — Varispeed WSOLA search radius reduced (correctness fix, latency side effect)
+
+**Context:** follow-up to this same date's search-cost entry above. A separate
+bug (`docs/FINDINGS.md` #23) — a periodic discontinuity artifact from the
+correlation search degenerating to a trivial no-op match on stationary
+material — was fixed in part by reducing `searchRadiusSamples` from
+window/4 to window/16 (the other part of the fix, a nominal-position
+bias, doesn't affect timing). Logged here specifically because
+`WSOLATimeStretcher::getLatencySamples()` is `windowSizeSamples +
+searchRadiusSamples`, so this incidentally *lowers* reported latency —
+a parameter change with a measurable timing effect, not just a DSP-quality
+one, hence its own entry per this log's standing rule rather than folding
+it silently into the FINDINGS.md row.
+
+**Data (44.1kHz):**
+
+| | searchRadiusSamples | Total latency (window + radius) |
+|---|---|---|
+| Before | 276 (window/4) | 1380 samples ≈ 31.3ms |
+| After | 69 (window/16) | 1173 samples ≈ 26.6ms |
+
+**Conclusion:** the correctness fix for finding #23 has a fortunate side
+effect — latency drops from 31.3ms to 26.6ms, moving Varispeed from
+"between PSOLA (~25ms) and the phase vocoder (~46ms)" to "essentially
+tied with PSOLA." Not the reason the radius was reduced (that was purely
+about the periodicity artifact), but worth recording since it changes a
+number this project reports to the user and compares across engines
+elsewhere (`docs/COMPARISON.md`-style framing). Not yet re-verified via
+`benchmarks/`'s latency-probe pattern the way PSOLA's own worst-case
+latency was (`docs/PERFORMANCE_LOG.md`'s PSOLA entries) — the number
+above is derived from the formula, not independently confirmed by an
+onset probe; flagged as a follow-up, not treated as equivalent to having
+measured it.

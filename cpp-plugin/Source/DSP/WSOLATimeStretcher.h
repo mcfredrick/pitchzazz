@@ -34,11 +34,75 @@ namespace pitchzazz
 /// though this class still normalizes by an explicit weight accumulator
 /// rather than relying on that being exact, the same defensive habit
 /// PSOLAPitchShifter's accumulator/accumulatorWeight pair already has).
-/// Search radius ≈ window/4. Deliberately a first pass, not a
-/// state-of-the-art implementation: the search correlates only over the
-/// overlap region (not the full window, to keep cost down) using plain
-/// normalized cross-correlation, not a smarter/cheaper similarity metric
-/// — see docs/PERFORMANCE_LOG.md for the measured cost once benchmarked.
+/// Deliberately a first pass, not a state-of-the-art implementation,
+/// using plain normalized cross-correlation rather than a smarter/
+/// cheaper similarity metric.
+///
+/// The search's correlation *length* is deliberately capped to a fixed
+/// constant (maxCorrelationLengthSamples), not the full overlap region —
+/// found the hard way, not designed in from the start: an earlier version
+/// correlated the entire synthesisHopSamples-length overlap region, which
+/// (since both search radius and correlation length scale with
+/// windowSizeSamples, itself sampleRate-derived) made total search cost
+/// scale as O(sampleRate²), not O(sampleRate). Invisible at 44.1kHz, but
+/// measured live at 96kHz pushing the shift stage to ~26ms against a
+/// ~21ms budget — a real, audible buffer underrun, not a theoretical
+/// concern. Capping correlation length independent of sample rate turns
+/// the cost back to O(searchRadiusSamples) — linear, matching how the
+/// existing engines' own costs scale — since a short reference snippet is
+/// sufficient to find a good splice offset; it doesn't need to cover the
+/// entire overlap region to work.
+///
+/// Search radius is window/16, not the much wider window/4 an earlier
+/// version used — also found via live testing, a separate bug from the
+/// one above. A pure correlation-quality search has a fundamental,
+/// not-implementation-specific failure mode on stationary/periodic
+/// material: the *objectively best* correlation available anywhere in the
+/// search window is trivially "match the immediately preceding window's
+/// tail almost exactly" (near-zero lag against the reference), which
+/// corresponds to advancing at the *fixed* synthesisHopSamples rate, not
+/// the ratio-scaled target — i.e. the search has every incentive to
+/// quietly stop stretching at all. Direct instrumentation on a sustained
+/// 220Hz tone confirmed exactly this: the actual read position advanced
+/// by precisely synthesisHopSamples every hop (not the intended,
+/// smaller, ratio-scaled hop), drifting away from the true target until
+/// the ~276-sample search radius was exhausted, forcing an abrupt
+/// ~400-sample corrective jump — recurring every 9-13 hops, landing at
+/// 6-9Hz, matching a periodic-discontinuity artifact heard by ear before
+/// this fix. Reducing the radius alone is only a partial, complementary
+/// fix (it bounds how far the degenerate solution can drift, it doesn't
+/// stop it from being preferred) — the real fix is in searchBestOffset(),
+/// documented there.
+///
+/// searchBestOffset() rejected two earlier approaches before landing on a
+/// hard minimum-improvement threshold — worth recording, since the first
+/// one *looked* like a fix (reduced the artifact) without actually being
+/// one: a small penalty proportional to distance-from-nominal shrank the
+/// drift range and the corrective-jump size, but a proportional penalty
+/// is negligible right near offset 0, exactly where the degenerate
+/// zero-lag preference actually originates — so it didn't stop the drift,
+/// it just made each cycle smaller and, measured after that change,
+/// *faster* (9-13 hops down to ~5), which is worse, not better: a fast
+/// small-amplitude periodic correction fuses perceptually into continuous
+/// buzz/roughness ("sounds like a fan") rather than occasional discrete
+/// clicks. The actual fix (see searchBestOffset()) is a hard bar the
+/// nominal position's own correlation score sets — verified afterward by
+/// instrumenting the chosen offset per window across ±0.5 to ±12
+/// semitones on the same sustained-tone signal: offset settles to a
+/// stable constant (never oscillates) and zero output discontinuities
+/// occur, versus the previous approach's continued periodic resets.
+///
+/// Known, accepted limitation, not silently swept aside (same disclosure
+/// standard PSOLAPitchShifter's own crackle/beat artifact gets,
+/// docs/FINDINGS.md #16/#17): a stationary pure tone is close to a worst
+/// case for any correlation-based search, and this fix works by refusing
+/// to deviate from nominal without substantial cause — on real voiced
+/// material (natural jitter, harmonic content, formant movement), that
+/// same threshold could still occasionally let a genuinely-better splice
+/// point through and be audible as an isolated correction, just not as a
+/// *periodic* one. A more complete fix would track phase continuity
+/// explicitly rather than gating on a single fixed correlation margin —
+/// bigger scope, not attempted here.
 ///
 /// Streaming push/pull interface, same shape as VarispeedResampler and
 /// for the same reason: this is one stage of a multi-stage variable-rate
@@ -89,6 +153,15 @@ private:
     int windowSizeSamples = 0;
     int synthesisHopSamples = 0; // windowSizeSamples / 2, the fixed output-domain hop
     int searchRadiusSamples = 0; // windowSizeSamples / 4
+
+    // Fixed, NOT sampleRate-derived — see the class doc for why this is
+    // the specific fix for the O(sampleRate²) search-cost bug found via
+    // live 96kHz testing. 256 samples is comfortably enough to distinguish
+    // waveform similarity for splice alignment (multiple cycles even at a
+    // low ~170Hz fundamental at 44.1kHz) without scaling up at higher
+    // sample rates the way the full overlap region did.
+    static constexpr int maxCorrelationLengthSamples = 256;
+    int correlationLengthSamples = 0; // min(synthesisHopSamples, maxCorrelationLengthSamples)
 
     std::vector<float> hannWindow; // periodic definition, length windowSizeSamples
 

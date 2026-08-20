@@ -18,7 +18,8 @@ WSOLATimeStretcher::WSOLATimeStretcher (double sampleRate)
     const int rawWindow = (int) std::lround (sampleRate * windowDurationSeconds);
     windowSizeSamples = std::max (16, rawWindow + (rawWindow % 2));
     synthesisHopSamples = windowSizeSamples / 2;
-    searchRadiusSamples = windowSizeSamples / 4;
+    searchRadiusSamples = windowSizeSamples / 16;
+    correlationLengthSamples = std::min (synthesisHopSamples, maxCorrelationLengthSamples);
 
     // Periodic (DFT-even) Hann definition — divides by windowSizeSamples,
     // not windowSizeSamples - 1 — which is the one that satisfies exact
@@ -57,39 +58,75 @@ int WSOLATimeStretcher::searchBestOffset (long long nominalStart) const noexcept
 
     // Reference (previous window's tail) energy doesn't depend on the
     // candidate offset — computed once outside the offset loop rather
-    // than 2*searchRadiusSamples+1 times.
+    // than 2*searchRadiusSamples+1 times. Only correlationLengthSamples
+    // long (a fixed constant), not the full overlap region — see the
+    // header's doc for why: this is the specific fix for a measured
+    // O(sampleRate²) search-cost bug.
     float refEnergy = 0.0f;
-    for (int k = 0; k < synthesisHopSamples; ++k)
+    for (int k = 0; k < correlationLengthSamples; ++k)
     {
         const float a = historyAt (refStart + k);
         refEnergy += a * a;
     }
 
-    float bestScore = -1.0f;
-    int bestOffset = 0;
-    for (int offset = -searchRadiusSamples; offset <= searchRadiusSamples; ++offset)
+    // Normalized cross-correlation between the reference segment and the
+    // candidate segment starting at `candStart` — comparable across
+    // candidates that may have genuinely different energy (a plain dot
+    // product would be biased toward louder segments, regardless of how
+    // well-aligned the waveform shape actually is).
+    const auto correlationAt = [&] (long long candStart) noexcept -> float
     {
-        const long long candStart = nominalStart + offset;
-        if (candStart < 0)
-            continue; // no real history before index 0 yet — only possible near stream start
-
         float dot = 0.0f;
         float candEnergy = 0.0f;
-        for (int k = 0; k < synthesisHopSamples; ++k)
+        for (int k = 0; k < correlationLengthSamples; ++k)
         {
             const float a = historyAt (refStart + k);
             const float b = historyAt (candStart + k);
             dot += a * b;
             candEnergy += b * b;
         }
-
-        // Normalized cross-correlation — comparable across offsets whose
-        // candidate segments may have genuinely different energy (a
-        // plain dot product would be biased toward louder segments,
-        // regardless of how well-aligned the waveform shape actually is).
         const float denom = std::sqrt (refEnergy * candEnergy) + 1.0e-9f;
-        const float score = dot / denom;
-        if (score > bestScore)
+        return dot / denom;
+    };
+
+    // The nominal (target) position is the baseline every other candidate
+    // has to *substantially* beat, not just edge out — a hard minimum-
+    // improvement bar, not a continuous distance-proportional penalty (an
+    // earlier version of this function). Found necessary, not a
+    // defensive habit: on strongly periodic material, a pure correlation-
+    // quality search has no reason to prefer offset 0 over some other
+    // offset that happens to correlate just as well (or marginally
+    // better, from finite-window/floating-point noise) — and a
+    // proportional penalty is negligible right near offset 0, so it
+    // couldn't actually stop that marginal preference from kicking off
+    // the same drift-then-jump pattern, just at a smaller scale (measured
+    // after that first fix: cycle length dropped from 9-13 hops to ~5,
+    // reported as sounding "like listening through a fan" — a *faster*,
+    // smaller periodic modulation is not an improvement, it crosses into
+    // continuous textural roughness rather than occasional discrete
+    // clicks). A hard bar closes that gap: nominal wins every tie and
+    // every near-tie, and only a clearly-substantial alignment
+    // improvement elsewhere is allowed to move the read position away
+    // from where the intended stretch ratio actually wants it — which is
+    // still WSOLA's real reason to exist over fixed-hop overlap-add, just
+    // reserved for when it's actually earned.
+    constexpr float minImprovementToDeviate = 0.02f;
+
+    const float nominalScore = correlationAt (nominalStart);
+    float bestScore = nominalScore;
+    int bestOffset = 0;
+
+    for (int offset = -searchRadiusSamples; offset <= searchRadiusSamples; ++offset)
+    {
+        if (offset == 0)
+            continue; // nominal already evaluated as the baseline above
+
+        const long long candStart = nominalStart + offset;
+        if (candStart < 0)
+            continue; // no real history before index 0 yet — only possible near stream start
+
+        const float score = correlationAt (candStart);
+        if (score > nominalScore + minImprovementToDeviate && score > bestScore)
         {
             bestScore = score;
             bestOffset = offset;
