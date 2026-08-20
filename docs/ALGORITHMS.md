@@ -427,12 +427,19 @@ specifically as a latency-focused alternative to the phase vocoder
   comment): placing content back at the exact position it was read from
   cannot change pitch at all — only *re-spacing* grains at closer or
   farther intervals than they were recorded at changes the perceived
-  pitch. Grain **width** (fixed at the original, unshifted period,
-  scaled only by the `grainWidthMultiplier` creative control,
-  `PSOLAPitchShifter.cpp:80`) is a completely independent knob that
-  preserves the spectral envelope/formants — spacing carries pitch,
+  pitch. Grain **width** is a completely independent knob from spacing
+  that preserves the spectral envelope/formants — spacing carries pitch,
   width carries timbre, and decoupling those is PSOLA's whole reason for
-  existing over naive resampling.
+  existing over naive resampling. Concretely (`PSOLAPitchShifter.cpp:80`):
+  `halfWidth = periodSamples · grainWidthMultiplier`, where `periodSamples`
+  is the *original, unshifted* detected-pitch period — i.e. the multiplier
+  is a multiple of *the current pitch's own period*, not a fixed sample
+  count or a fraction of the shifted target. Since a grain spans
+  `±halfWidth` around its mark, `grainWidthMultiplier = 1.0` means a grain
+  covers exactly 2 periods of the detected pitch; `1.25` (the shipped
+  default, `docs/PERFORMANCE_LOG.md`'s 2026-08-19 entry) covers 2.5;
+  `0.5` (`grainWidthMultiplierMin`) covers exactly 1, the narrowest this
+  control allows.
 
 **Latency derivation** (`PSOLAPitchShifter.h:125-144`,
 `PSOLAPitchShifter.cpp:16-40`): `latencySamples = 2 ·
