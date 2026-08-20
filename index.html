@@ -163,6 +163,25 @@
   .cite svg{ width:12px; height:12px; flex:none; }
   .cite .sha{ color:var(--ink-dim); opacity:0.6; }
 
+  /* ---------- acronym tooltips ---------- */
+  abbr.ac{
+    text-decoration:none; border-bottom:1px dotted var(--ink-dim);
+    cursor:help; position:relative; font:inherit;
+  }
+  abbr.ac:hover, abbr.ac:focus-visible{ border-bottom-color:var(--ink); outline:none; }
+  abbr.ac:hover::after, abbr.ac:focus-visible::after{
+    content:attr(data-tip);
+    position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%);
+    background:var(--panel-raised); color:var(--ink); border:1px solid var(--line);
+    padding:6px 11px; border-radius:7px; font-family:var(--mono); font-size:11.5px;
+    font-weight:600; white-space:nowrap; z-index:30; pointer-events:none;
+    box-shadow:0 8px 24px rgba(0,0,0,0.45);
+  }
+  abbr.ac:hover::before, abbr.ac:focus-visible::before{
+    content:""; position:absolute; left:50%; bottom:calc(100% + 3px); transform:translateX(-50%);
+    border:5px solid transparent; border-top-color:var(--line); z-index:30; pointer-events:none;
+  }
+
   .sub-card{
     border-left:3px solid var(--line); padding-left:22px; margin-bottom:56px;
   }
@@ -265,11 +284,11 @@
     <div class="chip-row">
       <span class="chip">lock-free ring buffers</span>
       <span class="chip">McLeod Pitch Method</span>
-      <span class="chip">NSDF autocorrelation</span>
+      <span class="chip"><abbr class="ac" tabindex="0" data-tip="Normalized Square Difference Function">NSDF</abbr> autocorrelation</span>
       <span class="chip">nearest-in-scale search</span>
-      <span class="chip">STFT phase vocoder</span>
-      <span class="chip">TD-PSOLA</span>
-      <span class="chip">WSOLA + varispeed resample</span>
+      <span class="chip"><abbr class="ac" tabindex="0" data-tip="Short-Time Fourier Transform">STFT</abbr> phase vocoder</span>
+      <span class="chip">TD-<abbr class="ac" tabindex="0" data-tip="Pitch-Synchronous Overlap-Add">PSOLA</abbr></span>
+      <span class="chip"><abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add">WSOLA</abbr> + varispeed resample</span>
       <span class="chip">atomic hot-swap</span>
     </div>
   </header>
@@ -300,7 +319,7 @@
 
           <rect x="245" y="120" width="110" height="60" rx="9" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
           <text x="300" y="146" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">ring buffer</text>
-          <text x="300" y="160" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">lock-free FIFO</text>
+          <text x="300" y="160" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">lock-free FIFO<title>FIFO: First In, First Out</title></text>
 
           <rect x="400" y="55" width="260" height="180" rx="12" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4" stroke-dasharray="3 4"/>
           <text x="530" y="76" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" letter-spacing="0.06em" fill="#8a8d9c">WORKER THREAD &middot; NO DEADLINE</text>
@@ -313,7 +332,7 @@
 
           <rect x="705" y="120" width="110" height="60" rx="9" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
           <text x="760" y="146" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">ring buffer</text>
-          <text x="760" y="160" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">lock-free FIFO</text>
+          <text x="760" y="160" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">lock-free FIFO<title>FIFO: First In, First Out</title></text>
 
           <text x="880" y="150" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#8a8d9c">out</text>
 
@@ -345,7 +364,7 @@
 
     <div class="sub-card on-green" style="border-left-color:var(--magenta)">
       <h3>Block-size decoupling <span class="full-name">&mdash; the host doesn't owe you a fixed size</span></h3>
-      <p>The detector needs a fixed-size block (2048 samples) to run its FFT against. Audio hosts don't
+      <p>The detector needs a fixed-size block (2048 samples) to run its <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform">FFT</abbr> against. Audio hosts don't
         guarantee one &mdash; a DAW can hand the callback 64, 128, or 512 samples depending on its own buffer
         setting, and that size can even change mid-session.</p>
 
@@ -390,16 +409,38 @@
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--cyan)"><span class="dot" style="background:var(--cyan)"></span>01 &middot; detect</div>
       <h2>Finding the pitch: autocorrelation, normalized</h2>
-      <p>A periodic signal looks like itself when shifted forward by exactly one period. <strong>Autocorrelation</strong>
-        finds that shift by comparing the signal against a delayed copy of itself at every possible lag &mdash;
-        but the McLeod Pitch Method's real contribution is <strong>normalizing</strong> that comparison so peaks
-        are comparable at every lag, not just biased toward small ones.</p>
+      <p>A pitched sound is <strong>periodic</strong> &mdash; its waveform repeats every T samples, where T is the
+        pitch period. That single fact is the entire idea: take a copy of the signal, slide it sideways by some
+        lag &tau;, and ask "does this copy look like the original again?" For almost every &tau; the answer is
+        no. But the moment &tau; happens to equal the true period T (or a whole multiple of it), the shifted copy
+        lines back up with the original almost exactly &mdash; because that's what "periodic" means. So: try
+        every possible &tau;, measure how well each shifted copy matches, and the &tau; with the best match
+        (past the trivial &tau;=0 case) <strong>is</strong> the pitch period. That measuring is what
+        <strong>autocorrelation</strong> is; <strong>normalizing</strong> the measurement so it's comparable at
+        every &tau; is the McLeod Pitch Method's own contribution, covered further down.</p>
     </div>
 
     <figure>
       <div class="fig-frame">
+        <div class="demo-controls">
+          <label for="lagSlider">lag &tau; (samples)</label>
+          <input type="range" id="lagSlider" min="0" max="26" step="1" value="6" aria-describedby="lagReadout">
+          <span class="demo-readout" id="lagReadout" aria-live="polite">&#964;=6 &middot; match 0.00</span>
+        </div>
+        <svg id="autocorrSvg" viewBox="0 0 900 240" role="img" aria-label="A synthetic periodic waveform overlaid with a copy of itself shifted by a draggable lag tau. At most lags the two copies don't line up and the correlation score is low; at tau equal to the true period, the shifted copy matches the original almost exactly and the score peaks.">
+          <text x="20" y="24" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">gray = original &middot; cyan = the same signal, shifted by &#964; &mdash; drag the slider</text>
+          <g id="autocorrDynamic"></g>
+        </svg>
+      </div>
+      <figcaption>The true period here is 20 samples. Drag &tau; to 0 (trivial self-match, always perfect and always
+        skipped) or to 20 (the real answer) and watch the cyan copy snap into alignment with the gray one &mdash;
+        that alignment <em>is</em> the high correlation score.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="fig-frame">
         <svg viewBox="0 0 900 300" role="img" aria-label="A windowed audio block is autocorrelated via FFT, then normalized into the NSDF curve. The trivial zero-lag peak is skipped; the first peak past it that clears the clarity threshold is refined by quadratic interpolation into the detected period.">
-          <text x="20" y="28" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">NSDF(&#964;) &mdash; normalized square difference, one analysis block</text>
+          <text x="20" y="28" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">NSDF(&#964;) &mdash; normalized square difference, one analysis block<title>NSDF: Normalized Square Difference Function</title></text>
 
           <!-- axes -->
           <line x1="60" y1="230" x2="860" y2="230" stroke="#2c3140" stroke-width="1.4"/>
@@ -430,17 +471,19 @@
           <text x="190" y="278" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#00e5ff">&#964; &rarr; refined by quadratic fit &rarr; f&#8320; = sr / &#964;</text>
         </svg>
       </div>
-      <figcaption>Note what's <em>not</em> here: no window taper is applied before this autocorrelation &mdash; unlike
-        the shift stage below, MPM runs on the raw fixed-size block. The energy gate (not drawn) skips this whole
+      <figcaption>This curve is the match score from the demo above, computed at <em>every</em> &tau; at once (via
+        <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform">FFT</abbr>, not by literally sliding and
+        re-measuring one &tau; at a time) and normalized into NSDF. Note what's <em>not</em> here: no window taper is applied before this autocorrelation &mdash; unlike
+        the shift stage below, <abbr class="ac" tabindex="0" data-tip="McLeod Pitch Method">MPM</abbr> runs on the raw fixed-size block. The energy gate (not drawn) skips this whole
         computation on silence.</figcaption>
     </figure>
 
     <div class="math-card cyan">
       <div class="mc-label">the math</div>
       <div class="math-line"><span class="k">energy gate</span><span class="v">E&nbsp;=&nbsp;&Sigma;&nbsp;x[n]&sup2;&nbsp;&mdash;&nbsp;skip the block entirely if E &lt; 0.15</span></div>
-      <div class="math-line"><span class="k">autocorrelation</span><span class="v">ACF(&#964;) = IFFT( |FFT(x)|&sup2; )&nbsp;&mdash;&nbsp;Wiener&ndash;Khinchin, O(N log N) instead of O(N&sup2;)</span></div>
+      <div class="math-line"><span class="k">autocorrelation</span><span class="v"><abbr class="ac" tabindex="0" data-tip="Autocorrelation Function">ACF</abbr>(&#964;) = <abbr class="ac" tabindex="0" data-tip="Inverse Fast Fourier Transform">IFFT</abbr>( |<abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform">FFT</abbr>(x)|&sup2; )&nbsp;&mdash;&nbsp;Wiener&ndash;Khinchin, O(N log N) instead of O(N&sup2;)</span></div>
       <div class="math-line"><span class="k">energy term</span><span class="v">m(&#964;) = &Sigma; x[n]&sup2; + &Sigma; x[n+&#964;]&sup2;&nbsp;&nbsp;(left window energy + right window energy)</span></div>
-      <div class="math-line"><span class="k">NSDF</span><span class="v">nsdf(&#964;) = 2&middot;ACF(&#964;) / m(&#964;)&nbsp;&mdash;&nbsp;bounded to [&minus;1, 1], comparable across every &#964;</span></div>
+      <div class="math-line"><span class="k"><abbr class="ac" tabindex="0" data-tip="Normalized Square Difference Function">NSDF</abbr></span><span class="v">nsdf(&#964;) = 2&middot;ACF(&#964;) / m(&#964;)&nbsp;&mdash;&nbsp;bounded to [&minus;1, 1], comparable across every &#964;</span></div>
       <div class="math-line"><span class="k">peak choice</span><span class="v">first &#964; past the initial positive run where nsdf(&#964;) &gt; 0.1 &mdash; <em>not</em> the tallest peak</span></div>
       <div class="math-line"><span class="k">sub-sample refine</span><span class="v">fit a parabola through (&minus;1,y&#8320;), (0,y&#8321;), (1,y&#8322;) around the peak, solve the vertex</span></div>
       <div class="cite"><a href="https://github.com/mcfredrick/pitchzazz/blob/3d859da3812cef37c848b83cb15d0ffbecaafd4b/cpp-plugin/Source/DSP/PitchDetector.cpp#L181" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3H3v10h10v-3M9 3h4v4M13 3L7 9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>PitchDetector.cpp<span class="sha">:181 @ 3d859da</span></a></div>
@@ -527,7 +570,7 @@
     <!-- ---- Phase Vocoder ---- -->
     <div class="sub-card on-green">
       <h3>Phase Vocoder <span class="full-name">&mdash; frequency domain</span></h3>
-      <p>Take the signal into the frequency domain with an FFT, then move each bin's content to a new bin
+      <p>Take the signal into the frequency domain with an <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform">FFT</abbr>, then move each bin's content to a new bin
         scaled by the pitch ratio. Relocating spectral content <strong>is</strong> the pitch shift; the phase
         math below exists purely to make that relocation sound coherent instead of smeared.</p>
 
@@ -595,8 +638,8 @@
 
     <!-- ---- TD-PSOLA ---- -->
     <div class="sub-card on-green">
-      <h3>TD-PSOLA <span class="full-name">&mdash; time domain, grain-based</span></h3>
-      <p>No FFT at all. Cut the signal into small windowed grains, one centered on each detected pitch period,
+      <h3><abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add">TD-PSOLA</abbr> <span class="full-name">&mdash; time domain, grain-based</span></h3>
+      <p>No <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform">FFT</abbr> at all. Cut the signal into small windowed grains, one centered on each detected pitch period,
         then paste those grains back down at new positions &mdash; closer together to raise pitch, farther
         apart to lower it. Each grain's own content never changes, only its <strong>spacing</strong> does.</p>
 
@@ -645,17 +688,17 @@
 
     <!-- ---- Varispeed + WSOLA ---- -->
     <div class="sub-card on-green">
-      <h3>Varispeed + WSOLA <span class="full-name">&mdash; stretch, then resample</span></h3>
+      <h3>Varispeed + <abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add">WSOLA</abbr> <span class="full-name">&mdash; stretch, then resample</span></h3>
       <p>The odd one out: this engine changes pitch by genuinely changing playback rate, the same physical
         effect as varispeed-ing a tape reel &mdash; formants shift right along with it, on purpose. Two stages,
-        in this order: <strong>WSOLA</strong> time-stretches the signal by the shift ratio first (pitch-preserving,
+        in this order: <strong><abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add">WSOLA</abbr></strong> time-stretches the signal by the shift ratio first (pitch-preserving,
         duration-changing), then a <strong>resample</strong> restores the original duration, which is what
         actually moves the pitch.</p>
 
       <figure>
         <div class="fig-frame">
           <svg viewBox="0 0 900 190" role="img" aria-label="WSOLA searches a radius around the nominal next window position for the offset whose content best correlates with the previously placed window, then splices there instead of at a fixed hop.">
-            <text x="20" y="24" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">WSOLA splice search &mdash; correlate candidate offsets against the reference tail</text>
+            <text x="20" y="24" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">WSOLA splice search &mdash; correlate candidate offsets against the reference tail<title>WSOLA: Waveform Similarity Overlap-Add</title></text>
             <line x1="40" y1="110" x2="860" y2="110" stroke="#2c3140" stroke-width="1.4"/>
             <rect x="120" y="88" width="140" height="44" rx="6" fill="#1b1e27" stroke="#f1f1f6" stroke-width="1.6"/>
             <text x="190" y="114" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">reference (placed)</text>
@@ -696,7 +739,7 @@
 
       <div class="math-card green">
         <div class="mc-label">the math</div>
-        <div class="math-line"><span class="k">splice score</span><span class="v">NCC(offset) = &Sigma;(a&middot;b) / &radic;(&Sigma;a&sup2; &middot; &Sigma;b&sup2;)&nbsp;&mdash;&nbsp;normalized cross-correlation, capped to a 256-sample window</span></div>
+        <div class="math-line"><span class="k">splice score</span><span class="v"><abbr class="ac" tabindex="0" data-tip="Normalized Cross-Correlation">NCC</abbr>(offset) = &Sigma;(a&middot;b) / &radic;(&Sigma;a&sup2; &middot; &Sigma;b&sup2;)&nbsp;&mdash;&nbsp;normalized cross-correlation, capped to a 256-sample window</span></div>
         <div class="math-line"><span class="k">deviate only if</span><span class="v">NCC(offset) &gt; NCC(0) + 0.02 &mdash; a hard margin, not a soft distance penalty</span></div>
         <div class="math-line"><span class="k">resample</span><span class="v">p(t) = 0.5&middot;[2p&#8321; + (p&#8322;&minus;p&#8320;)t + (2p&#8320;&minus;5p&#8321;+4p&#8322;&minus;p&#8323;)t&sup2; + (3p&#8321;&minus;3p&#8322;+p&#8323;&minus;p&#8320;)t&sup3;]</span></div>
         <div class="math-line"><span class="k">read rate</span><span class="v">read position advances by shift = 2^(semitoneShift/12) samples per output sample</span></div>
@@ -708,9 +751,9 @@
       <table class="compare-table">
         <thead><tr><th>engine</th><th>domain</th><th>what actually moves</th><th>latency behavior</th></tr></thead>
         <tbody>
-          <tr><td><span class="swatch" style="background:var(--green)"></span>Phase Vocoder</td><td>frequency</td><td>FFT bin position</td><td>fixed &mdash; a step function of the analysis window</td></tr>
-          <tr><td><span class="swatch" style="background:var(--green)"></span>TD-PSOLA</td><td>time</td><td>grain spacing</td><td>scales with pitch period, not window size</td></tr>
-          <tr><td><span class="swatch" style="background:var(--green)"></span>Varispeed+WSOLA</td><td>time (rate)</td><td>playback speed</td><td>fixed, ratio-independent by design</td></tr>
+          <tr><td><span class="swatch" style="background:var(--green)"></span>Phase Vocoder</td><td>frequency</td><td><abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform">FFT</abbr> bin position</td><td>fixed &mdash; a step function of the analysis window</td></tr>
+          <tr><td><span class="swatch" style="background:var(--green)"></span><abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add">TD-PSOLA</abbr></td><td>time</td><td>grain spacing</td><td>scales with pitch period, not window size</td></tr>
+          <tr><td><span class="swatch" style="background:var(--green)"></span>Varispeed+<abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add">WSOLA</abbr></td><td>time (rate)</td><td>playback speed</td><td>fixed, ratio-independent by design</td></tr>
         </tbody>
       </table>
     </div>
@@ -726,7 +769,7 @@
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--magenta)"><span class="dot" style="background:var(--magenta)"></span>04 &middot; hot-swap</div>
       <h2>Changing engines live, with no dropout</h2>
-      <p>Switching from the phase vocoder to TD-PSOLA mid-performance can't pause audio to do it. The handoff
+      <p>Switching from the phase vocoder to <abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add">TD-PSOLA</abbr> mid-performance can't pause audio to do it. The handoff
         is <strong>one atomic pointer exchange</strong>, picked up by the worker thread between blocks &mdash;
         never mid-<code>process()</code> &mdash; and the outgoing engine's warmed-up internal state gets
         cross-faded out instead of just discarded.</p>
@@ -909,6 +952,104 @@
         group.appendChild(ct);
       }
     });
+  }
+
+  slider.addEventListener('input', render);
+  render();
+})();
+
+(function(){
+  var slider = document.getElementById('lagSlider');
+  var readout = document.getElementById('lagReadout');
+  var group = document.getElementById('autocorrDynamic');
+  if (!slider || !group) return;
+
+  // One period of a synthetic glottal-pulse-like waveform: sharp rise,
+  // sharp peak, slower decay, small ripple, long low tail. Kept
+  // non-negative on purpose so the correlation score below stays in a
+  // simple, intuitive [0,1] range instead of needing to explain sign.
+  var period = [0.05,0.25,0.65,0.95,0.75,0.45,0.25,0.14,0.10,0.12,0.16,0.13,0.08,0.05,0.03,0.02,0.02,0.03,0.04,0.04];
+  var T = period.length; // true period, in samples
+  var pxPerSample = 5;
+  var leftX = 60, baselineY = 110, amp = 85;
+  var totalSamples = 160; // 8 periods across the plot
+
+  function valAt(i){ var k = ((i % T) + T) % T; return period[k]; }
+
+  function points(offset){
+    var pts = [];
+    for (var i=0; i<totalSamples; i++){
+      var x = leftX + i*pxPerSample;
+      var y = baselineY - valAt(i+offset)*amp;
+      pts.push(x.toFixed(1)+','+y.toFixed(1));
+    }
+    return pts.join(' ');
+  }
+
+  function correlationAt(tau){
+    // Real normalized cross-correlation between the reference and the
+    // tau-shifted copy, over a fixed window — not a stand-in number.
+    var W = 60, num=0, refE=0, shE=0;
+    for (var i=0; i<W; i++){
+      var r = valAt(i), s = valAt(i+tau);
+      num += r*s; refE += r*r; shE += s*s;
+    }
+    return num / Math.sqrt(refE*shE);
+  }
+
+  function render(){
+    var tau = parseInt(slider.value, 10);
+    var score = correlationAt(tau);
+    var aligned = score > 0.9;
+    readout.textContent = 'τ=' + tau + ' · match ' + score.toFixed(2) + (aligned ? ' ✓ aligned' : '');
+    readout.style.color = aligned ? 'var(--green)' : 'var(--magenta)';
+
+    var ns = 'http://www.w3.org/2000/svg';
+    while (group.firstChild) group.removeChild(group.firstChild);
+
+    var baseline = document.createElementNS(ns,'line');
+    baseline.setAttribute('x1', leftX); baseline.setAttribute('x2', leftX + totalSamples*pxPerSample);
+    baseline.setAttribute('y1', baselineY); baseline.setAttribute('y2', baselineY);
+    baseline.setAttribute('stroke', '#2c3140'); baseline.setAttribute('stroke-width', '1');
+    group.appendChild(baseline);
+
+    // one-period bracket for scale
+    var bx1 = leftX, bx2 = leftX + T*pxPerSample, by = 168;
+    [[bx1,by-6,bx1,by],[bx1,by,bx2,by],[bx2,by-6,bx2,by]].forEach(function(seg){
+      var l = document.createElementNS(ns,'line');
+      l.setAttribute('x1',seg[0]); l.setAttribute('y1',seg[1]); l.setAttribute('x2',seg[2]); l.setAttribute('y2',seg[3]);
+      l.setAttribute('stroke','#8a8d9c'); l.setAttribute('stroke-width','1');
+      group.appendChild(l);
+    });
+    var bt = document.createElementNS(ns,'text');
+    bt.setAttribute('x', (bx1+bx2)/2); bt.setAttribute('y', by+16);
+    bt.setAttribute('text-anchor','middle'); bt.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace');
+    bt.setAttribute('font-size','10.5'); bt.setAttribute('fill','#8a8d9c');
+    bt.textContent = 'one period, T=' + T + ' samples';
+    group.appendChild(bt);
+
+    // reference (gray, fixed)
+    var refLine = document.createElementNS(ns,'polyline');
+    refLine.setAttribute('points', points(0));
+    refLine.setAttribute('fill','none'); refLine.setAttribute('stroke','#8a8d9c');
+    refLine.setAttribute('stroke-width','2'); refLine.setAttribute('opacity','0.65');
+    group.appendChild(refLine);
+
+    // shifted copy (cyan, moves with tau) — brighter/thicker when aligned
+    var shLine = document.createElementNS(ns,'polyline');
+    shLine.setAttribute('points', points(tau));
+    shLine.setAttribute('fill','none'); shLine.setAttribute('stroke', aligned ? '#39ff88' : '#00e5ff');
+    shLine.setAttribute('stroke-width', aligned ? '3' : '2');
+    group.appendChild(shLine);
+
+    if (aligned){
+      var lab = document.createElementNS(ns,'text');
+      lab.setAttribute('x', leftX + totalSamples*pxPerSample - 10); lab.setAttribute('y', 40);
+      lab.setAttribute('text-anchor','end'); lab.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace');
+      lab.setAttribute('font-size','12'); lab.setAttribute('font-weight','600'); lab.setAttribute('fill','#39ff88');
+      lab.textContent = tau === 0 ? 'τ=0: trivial self-match, always skipped' : 'lines back up — τ = the true period';
+      group.appendChild(lab);
+    }
   }
 
   slider.addEventListener('input', render);
