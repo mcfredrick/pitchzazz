@@ -974,15 +974,18 @@ control range (no correctness cost), so it was the lever pulled:
 | `grainWidthMultiplierMax` | 44.1kHz | 48kHz | vs. old 1.5x |
 |---|---|---|---|
 | 1.5 (old) | 37.55ms | 37.50ms | — |
-| 1.25 (experimental, pending listening) | 31.29ms | 31.25ms | ~17% lower |
+| 1.25 (**shipped**) | 31.29ms | 31.25ms | ~17% lower |
 | 1.0 (not chosen) | 25.03ms | 25.00ms | ~33% lower, but removes all "widen" headroom above the 1.0x default |
 
 1.25 was picked over 1.0 specifically to leave the creative control some
 room to widen the grain above its default, at the cost of a smaller
 latency win. Built alongside the phase-vocoder change for the same
-listening session; **pending confirmation** — not yet a committed
-default, same caveat `windowSizeMs` had before this session's listening
-pass confirmed it. Does not fully reclaim TD-PSOLA's latency lead over
-the now-tightened phase vocoder (31ms vs. 21-23ms) — see
-`docs/ALGORITHMS.md` for why `minHz` was deliberately left alone rather
-than pushed further to try to close that remaining gap.
+listening session, initially pending confirmation the same way
+`windowSizeMs` was before this session's listening pass confirmed it —
+**now confirmed**: user-tested by ear at 1.25 ("sounds fine") and below
+1.25 ("sounds pretty bad"), i.e. 1.25 isn't just a cautious middle value,
+it's close to the actual perceptual floor for this control, not merely a
+number chosen to preserve creative headroom. Does not fully reclaim
+TD-PSOLA's latency lead over the now-tightened phase vocoder (31ms vs.
+21-23ms) — see `docs/ALGORITHMS.md` for why `minHz` was deliberately left
+alone rather than pushed further to try to close that remaining gap.

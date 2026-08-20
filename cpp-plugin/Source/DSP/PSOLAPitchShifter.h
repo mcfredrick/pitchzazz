@@ -32,7 +32,7 @@ namespace pitchzazz
 // (docs/ROADMAP.md's original framing for building TD-PSOLA at all: a
 // latency win over the phase vocoder).
 //
-// EXPERIMENTAL (2026-08-19): was 1.5. That framing no longer holds after
+// CHANGED (2026-08-19): was 1.5. That framing no longer holds after
 // PluginProcessor.h's windowSizeMs was independently tightened
 // (50ms->30ms), cutting the phase vocoder to ~21-23ms and leaving PSOLA
 // at 1.5x (~37.5ms) *higher*-latency than the engine it was originally
@@ -43,8 +43,11 @@ namespace pitchzazz
 // not lower than the phase vocoder's new number, but a real ~17% cut
 // from 37.5ms — while still leaving the creative control room to widen
 // the grain above its 1.0x default, unlike 1.0x (which would leave no
-// "wider" range at all). Pending a real listening test before this is a
-// committed default, same caveat as the 1.5x choice originally had.
+// "wider" range at all). Confirmed by ear, same caveat the 1.5x choice
+// originally had: 1.25x sounds fine, and — not just a cautious middle
+// value — going any lower audibly degrades, so this sits close to this
+// control's actual perceptual floor, not merely a headroom-preserving
+// compromise.
 constexpr float grainWidthMultiplierMin = 0.5f;
 constexpr float grainWidthMultiplierMax = 1.25f;
 
