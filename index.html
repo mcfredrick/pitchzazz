@@ -1005,14 +1005,21 @@
   }
 
   function correlationAt(tau){
-    // Real normalized cross-correlation between the reference and the
-    // tau-shifted copy, over a fixed window — not a stand-in number.
-    var W = 60, num=0, refE=0, shE=0;
+    // The actual NSDF formula the code uses (PitchDetector.cpp), not a
+    // normalized-cross-correlation lookalike: nsdf(tau) = 2*ACF(tau) / m(tau),
+    // where m(tau) is the *sum* of the two windows' energies. (For this
+    // synthetic exactly-periodic signal, sum-normalization and the more
+    // familiar sqrt(refE*shE) geometric-mean normalization happen to
+    // coincide exactly — window length here is a whole multiple of the
+    // period, so refE == shE for every tau — but real, non-periodic audio
+    // doesn't have that property, so this uses the real formula, not the
+    // one that only looks equivalent here.)
+    var W = 60, acf=0, refE=0, shE=0;
     for (var i=0; i<W; i++){
       var r = valAt(i), s = valAt(i+tau);
-      num += r*s; refE += r*r; shE += s*s;
+      acf += r*s; refE += r*r; shE += s*s;
     }
-    return num / Math.sqrt(refE*shE);
+    return (2*acf) / (refE + shE);
   }
 
   function render(){
