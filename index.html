@@ -380,7 +380,7 @@
               <rect x="192" y="60" width="60" height="40" rx="4"/>
               <rect x="260" y="60" width="34" height="40" rx="4"/>
             </g>
-            <text x="167" y="120" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">64 / 128 / 64 / 128 / 64 samples per callback, whatever the host hands over</text>
+            <text x="167" y="120" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#8a8d9c">64/128/64/128/64 &mdash; host's choice</text>
             <line x1="310" y1="80" x2="360" y2="80" stroke="#8a8d9c" stroke-width="1.6" marker-end="url(#bsArrow)"/>
             <rect x="380" y="30" width="480" height="100" rx="10" fill="#1b1e27" stroke="#39ff88" stroke-width="2.2"/>
             <rect x="392" y="42" width="200" height="76" rx="4" fill="#39ff88" fill-opacity="0.16"/>
@@ -452,7 +452,7 @@
 
           <!-- clarity threshold line -->
           <line x1="60" y1="150" x2="860" y2="150" stroke="#8a8d9c" stroke-width="1" stroke-dasharray="4 4"/>
-          <text x="862" y="154" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">clarity threshold (0.1)</text>
+          <text x="856" y="144" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">clarity threshold (0.1)</text>
 
           <!-- NSDF curve -->
           <polyline points="60,62 100,150 140,220 190,160 230,225 290,90 340,205 400,120 460,200 520,175 590,205 660,200 730,205 800,208 860,210"
@@ -707,10 +707,11 @@
             <text x="445" y="52" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">search radius = window / 16</text>
 
             <rect x="400" y="88" width="140" height="44" rx="6" fill="#1b1e27" stroke="#39ff88" stroke-width="2.2"/>
-            <text x="470" y="114" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#39ff88">best-correlated candidate</text>
+            <text x="470" y="105" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#39ff88">best-correlated</text>
+            <text x="470" y="120" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#39ff88">candidate</text>
 
             <line x1="260" y1="110" x2="396" y2="110" stroke="#39ff88" stroke-width="1.6" stroke-dasharray="3 3" marker-end="url(#wA)"/>
-            <text x="700" y="106" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#8a8d9c">spliced here, not at the fixed nominal hop</text>
+            <text x="328" y="168" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#8a8d9c">spliced here, not the fixed hop</text>
             <defs><marker id="wA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#39ff88"/></marker></defs>
           </svg>
         </div>
@@ -803,7 +804,7 @@
 
           <line x1="160" y1="102" x2="201" y2="102" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#hsArrow)"/>
           <line x1="375" y1="102" x2="416" y2="102" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#hsArrow)"/>
-          <text x="396" y="92" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9" fill="#8a8d9c">store (release)</text>
+          <text x="396" y="52" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">store (release)</text>
           <line x1="560" y1="102" x2="601" y2="102" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#hsArrow)"/>
           <line x1="755" y1="102" x2="796" y2="102" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#hsArrow)"/>
           <defs><marker id="hsArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8d9c"/></marker></defs>
@@ -1132,7 +1133,7 @@
     group.appendChild(dot);
 
     var lab = document.createElementNS(ns,'text');
-    lab.setAttribute('x', xFor(pc)); lab.setAttribute('y', 78);
+    lab.setAttribute('x', Math.max(95, Math.min(773, xFor(pc)))); lab.setAttribute('y', 78);
     lab.setAttribute('text-anchor','middle'); lab.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace');
     lab.setAttribute('font-size','11.5'); lab.setAttribute('font-weight','600'); lab.setAttribute('fill','#ffb020');
     lab.textContent = 'detected: pc ' + pc + ' (' + names[pc] + ')';
@@ -1240,7 +1241,7 @@
 
   var plotX0 = 90, plotX1 = 830, plotY0 = 170, plotY1 = 40;
   function xAt(t){ return plotX0 + t*(plotX1-plotX0); }
-  function yAt(g){ return plotY0 + (1-g)*(plotY1-plotY0); }
+  function yAt(g){ return plotY0 + g*(plotY1-plotY0); }
 
   function curvePoints(fn, n){
     var pts = [];
