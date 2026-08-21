@@ -425,7 +425,7 @@
       <div class="fig-frame">
         <div class="demo-controls">
           <label for="lagSlider">lag &tau; (samples)</label>
-          <input type="range" id="lagSlider" min="0" max="26" step="1" value="6" aria-describedby="lagReadout">
+          <input type="range" id="lagSlider" min="0" max="44" step="1" value="6" aria-describedby="lagReadout">
           <span class="demo-readout" id="lagReadout" aria-live="polite">&#964;=6 &middot; match 0.00</span>
         </div>
         <svg id="autocorrSvg" viewBox="0 0 900 240" role="img" aria-label="A synthetic periodic waveform overlaid with a copy of itself shifted by a draggable lag tau. At most lags the two copies don't line up and the correlation score is low; at tau equal to the true period, the shifted copy matches the original almost exactly and the score peaks.">
@@ -440,8 +440,8 @@
 
     <figure>
       <div class="fig-frame">
-        <svg viewBox="0 0 900 300" role="img" aria-label="A windowed audio block is autocorrelated via FFT, then normalized into the NSDF curve. The trivial zero-lag peak is skipped; the first peak past it that clears the clarity threshold is refined by quadratic interpolation into the detected period.">
-          <text x="20" y="28" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">NSDF(&#964;) &mdash; normalized square difference, one analysis block<title>NSDF: Normalized Square Difference Function — normalized autocorrelation, bounded to [−1,1]</title></text>
+        <svg id="nsdfCurveSvg" viewBox="0 0 900 300" role="img" aria-label="This is the actual NSDF match score, computed for every tau from 0 to 44 for the exact same signal as the demo above — not an illustration. It peaks at tau=0, the trivial self-match, and again at tau=20, the true period this signal's algorithm finds; a faint echo of the same peak starts to reappear near tau=40, since a periodic signal is by definition also periodic at every multiple of its true period. A marker tracks the slider above live.">
+          <text x="20" y="28" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">NSDF(&#964;) for the <em>exact same signal</em> as the demo above, &#964;=0..44 &mdash; not an illustration, actually computed<title>NSDF: Normalized Square Difference Function — normalized autocorrelation, bounded to [−1,1]</title></text>
 
           <!-- axes -->
           <line x1="60" y1="230" x2="860" y2="230" stroke="#2c3140" stroke-width="1.4"/>
@@ -449,33 +449,21 @@
           <text x="60" y="250" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">&#964;=0</text>
           <text x="835" y="250" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">&#964; &rarr;</text>
           <text x="24" y="64" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">1.0</text>
+          <text x="24" y="234" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">0.0</text>
 
-          <!-- clarity threshold line -->
-          <line x1="60" y1="150" x2="860" y2="150" stroke="#8a8d9c" stroke-width="1" stroke-dasharray="4 4"/>
-          <text x="856" y="144" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">clarity threshold (0.1)</text>
+          <!-- clarity threshold line, at the real y for NSDF=0.1 -->
+          <line x1="60" y1="213" x2="860" y2="213" stroke="#8a8d9c" stroke-width="1" stroke-dasharray="4 4"/>
+          <text x="856" y="207" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">clarity threshold (0.1)</text>
 
-          <!-- NSDF curve -->
-          <polyline points="60,62 100,150 140,220 190,160 230,225 290,90 340,205 400,120 460,200 520,175 590,205 660,200 730,205 800,208 860,210"
-                    fill="none" stroke="#00e5ff" stroke-width="2.2"/>
-
-          <!-- tau=0 marker -->
-          <circle cx="60" cy="62" r="5" fill="none" stroke="#f1f1f6" stroke-width="1.6"/>
-          <text x="60" y="46" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#f1f1f6">self-corr, skipped</text>
-
-          <!-- rejected peak -->
-          <circle cx="290" cy="90" r="5" fill="none" stroke="#8a8d9c" stroke-width="1.4" stroke-dasharray="2 2"/>
-
-          <!-- accepted peak -->
-          <circle cx="230" cy="225" r="4" fill="none" stroke="#00e5ff" stroke-width="1"/>
-          <circle cx="190" cy="160" r="6.5" fill="#00e5ff"/>
-          <line x1="190" y1="160" x2="190" y2="230" stroke="#00e5ff" stroke-width="1.2" stroke-dasharray="3 3"/>
-          <text x="190" y="278" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#00e5ff">&#964; &rarr; refined by quadratic fit &rarr; f&#8320; = sr / &#964;</text>
+          <g id="nsdfCurveDynamic"></g>
         </svg>
       </div>
-      <figcaption>This curve is the match score from the demo above, computed at <em>every</em> &tau; at once (via
-        <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform — converts a signal between the time and frequency domains in O(N log N)">FFT</abbr>, not by literally sliding and
-        re-measuring one &tau; at a time) and normalized into <abbr class="ac" tabindex="0" data-tip="Normalized Square Difference Function — a normalized autocorrelation curve, bounded to [−1,1], so peaks are comparable at every lag">NSDF</abbr>. Note what's <em>not</em> here: no window taper is applied before this autocorrelation &mdash; unlike
-        the shift stage below, <abbr class="ac" tabindex="0" data-tip="McLeod Pitch Method — a modified-autocorrelation pitch detector built around the NSDF">MPM</abbr> runs on the raw fixed-size block. The energy gate (not drawn) skips this whole
+      <figcaption>This is the real match score from the demo above, computed at <em>every</em> &tau; from 0 to 44 (via
+        <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform — converts a signal between the time and frequency domains in O(N log N)">FFT</abbr> in the real detector, not by literally sliding and
+        re-measuring one &tau; at a time &mdash; see "every &#964; at once" above) and normalized into
+        <abbr class="ac" tabindex="0" data-tip="Normalized Square Difference Function — a normalized autocorrelation curve, bounded to [−1,1], so peaks are comparable at every lag">NSDF</abbr>. Drag the slider in the demo above &mdash; the marker here tracks it live, landing exactly on
+        the peak at &#964;=20. Note what's <em>not</em> here: no window taper is applied before this autocorrelation
+        &mdash; unlike the shift stage below, <abbr class="ac" tabindex="0" data-tip="McLeod Pitch Method — a modified-autocorrelation pitch detector built around the NSDF">MPM</abbr> runs on the raw fixed-size block. The energy gate (not drawn) skips this whole
         computation on silence.</figcaption>
     </figure>
 
@@ -1082,8 +1070,115 @@
       lab.textContent = tau === 0 ? 'τ=0: trivial self-match, always skipped' : 'lines back up — τ = the true period';
       group.appendChild(lab);
     }
+
+    updateCurveMarker(tau);
   }
 
+  // ---- The real NSDF(τ) curve (separate figure below) — computed once
+  // from the exact same correlationAt(), not hand-illustrated. Peaks are
+  // *found* by scanning for local maxima above the clarity threshold,
+  // mirroring pitchFromPeaks' own logic, not hardcoded to "20".
+  var curveCx = null, curveCy = null, curveScores = null;
+  var maxTauCurve = 44;
+
+  function drawCurveOnce(){
+    var curveGroup = document.getElementById('nsdfCurveDynamic');
+    if (!curveGroup) return;
+    var ns = 'http://www.w3.org/2000/svg';
+    var cLeft = 60, cRight = 860, cTop = 60, cBottom = 230;
+    curveCx = function (t) { return cLeft + (t / maxTauCurve) * (cRight - cLeft); };
+    curveCy = function (s) { var v = Math.max(0, Math.min(1, s)); return cBottom - v * (cBottom - cTop); };
+
+    curveScores = [];
+    for (var t = 0; t <= maxTauCurve; t++) curveScores.push(correlationAt(t));
+
+    var pts = [];
+    for (t = 0; t <= maxTauCurve; t++) pts.push(curveCx(t).toFixed(1) + ',' + curveCy(curveScores[t]).toFixed(1));
+    var curveLine = document.createElementNS(ns, 'polyline');
+    curveLine.setAttribute('points', pts.join(' '));
+    curveLine.setAttribute('fill', 'none'); curveLine.setAttribute('stroke', '#00e5ff'); curveLine.setAttribute('stroke-width', '2.2');
+    curveGroup.appendChild(curveLine);
+
+    // τ=0: trivial self-match, always skipped
+    var c0 = document.createElementNS(ns, 'circle');
+    c0.setAttribute('cx', curveCx(0)); c0.setAttribute('cy', curveCy(curveScores[0])); c0.setAttribute('r', '5');
+    c0.setAttribute('fill', 'none'); c0.setAttribute('stroke', '#f1f1f6'); c0.setAttribute('stroke-width', '1.6');
+    curveGroup.appendChild(c0);
+    var l0 = document.createElementNS(ns, 'text');
+    l0.setAttribute('x', curveCx(0) + 8); l0.setAttribute('y', curveCy(curveScores[0]) - 10);
+    l0.setAttribute('font-family', 'ui-monospace,Menlo,Consolas,monospace'); l0.setAttribute('font-size', '10.5'); l0.setAttribute('fill', '#f1f1f6');
+    l0.textContent = 'τ=0: trivial, skipped';
+    curveGroup.appendChild(l0);
+
+    // Find the first real peak past τ=0 that clears the clarity threshold —
+    // scanning, not hardcoded — same logic pitchFromPeaks uses.
+    var answerTau = -1;
+    for (var i = 1; i < curveScores.length - 1; i++) {
+      if (curveScores[i] > curveScores[i - 1] && curveScores[i] >= curveScores[i + 1] && curveScores[i] > 0.1) {
+        answerTau = i; break;
+      }
+    }
+
+    if (answerTau > 0) {
+      var ring = document.createElementNS(ns, 'circle');
+      ring.setAttribute('cx', curveCx(answerTau)); ring.setAttribute('cy', curveCy(curveScores[answerTau])); ring.setAttribute('r', '7');
+      ring.setAttribute('fill', '#00e5ff');
+      curveGroup.appendChild(ring);
+      var vline = document.createElementNS(ns, 'line');
+      vline.setAttribute('x1', curveCx(answerTau)); vline.setAttribute('x2', curveCx(answerTau));
+      vline.setAttribute('y1', curveCy(curveScores[answerTau])); vline.setAttribute('y2', cBottom);
+      vline.setAttribute('stroke', '#00e5ff'); vline.setAttribute('stroke-width', '1.2'); vline.setAttribute('stroke-dasharray', '3 3');
+      curveGroup.appendChild(vline);
+      var alab = document.createElementNS(ns, 'text');
+      alab.setAttribute('x', curveCx(answerTau)); alab.setAttribute('y', cBottom + 20);
+      alab.setAttribute('text-anchor', 'middle'); alab.setAttribute('font-family', 'ui-monospace,Menlo,Consolas,monospace');
+      alab.setAttribute('font-size', '12'); alab.setAttribute('font-weight', '600'); alab.setAttribute('fill', '#00e5ff');
+      alab.textContent = 'τ=' + answerTau + ' — the answer (refined by quadratic fit → f₀ = sr/τ)';
+      curveGroup.appendChild(alab);
+
+      // Any further peaks are the same periodicity recurring at integer
+      // multiples — real, but pitchFromPeaks already returned before
+      // reaching them, exactly like the loop in PitchDetector.cpp.
+      for (var j = answerTau + 1; j < curveScores.length - 1; j++) {
+        if (curveScores[j] > curveScores[j - 1] && curveScores[j] >= curveScores[j + 1] && curveScores[j] > 0.1) {
+          var echo = document.createElementNS(ns, 'circle');
+          echo.setAttribute('cx', curveCx(j)); echo.setAttribute('cy', curveCy(curveScores[j])); echo.setAttribute('r', '5');
+          echo.setAttribute('fill', 'none'); echo.setAttribute('stroke', '#8a8d9c'); echo.setAttribute('stroke-width', '1.4'); echo.setAttribute('stroke-dasharray', '2 2');
+          curveGroup.appendChild(echo);
+          var elab = document.createElementNS(ns, 'text');
+          elab.setAttribute('x', curveCx(j)); elab.setAttribute('y', curveCy(curveScores[j]) - 12);
+          elab.setAttribute('text-anchor', 'middle'); elab.setAttribute('font-family', 'ui-monospace,Menlo,Consolas,monospace');
+          elab.setAttribute('font-size', '9.5'); elab.setAttribute('fill', '#8a8d9c');
+          elab.textContent = 'τ=' + j + ': same period ×' + Math.round(j / answerTau) + ' — never reached';
+          curveGroup.appendChild(elab);
+        }
+      }
+    }
+
+    var markerGroup = document.createElementNS(ns, 'g');
+    markerGroup.setAttribute('id', 'nsdfCurveMarker');
+    curveGroup.appendChild(markerGroup);
+  }
+
+  function updateCurveMarker(tau){
+    var markerGroup = document.getElementById('nsdfCurveMarker');
+    if (!markerGroup || !curveCx) return;
+    var ns = 'http://www.w3.org/2000/svg';
+    while (markerGroup.firstChild) markerGroup.removeChild(markerGroup.firstChild);
+    var clamped = Math.max(0, Math.min(maxTauCurve, tau));
+    var score = correlationAt(clamped);
+    var mx = curveCx(clamped), my = curveCy(score);
+    var vline = document.createElementNS(ns, 'line');
+    vline.setAttribute('x1', mx); vline.setAttribute('x2', mx); vline.setAttribute('y1', 60); vline.setAttribute('y2', 230);
+    vline.setAttribute('stroke', '#ffb020'); vline.setAttribute('stroke-width', '1.3'); vline.setAttribute('stroke-dasharray', '2 3'); vline.setAttribute('opacity', '0.9');
+    markerGroup.appendChild(vline);
+    var dot = document.createElementNS(ns, 'circle');
+    dot.setAttribute('cx', mx); dot.setAttribute('cy', my); dot.setAttribute('r', '6');
+    dot.setAttribute('fill', '#ffb020'); dot.setAttribute('stroke', '#12141a'); dot.setAttribute('stroke-width', '2');
+    markerGroup.appendChild(dot);
+  }
+
+  drawCurveOnce();
   slider.addEventListener('input', render);
   render();
 })();
