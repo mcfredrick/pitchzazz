@@ -543,13 +543,15 @@
       <figcaption>The search loop allows up to distance 6, but never actually needs more than 1 for any of the
         seven modes this scale type supports: all seven are rotations of the same major-scale step pattern
         (W&#8209;W&#8209;H&#8209;W&#8209;W&#8209;W&#8209;H), so the largest gap between two scale members is always exactly a whole tone
-        &mdash; the note squarely between them is always one semitone from one side or the other. 6 is a
-        generic worst-case bound (half the 12-semitone octave, correct for <em>any</em> conceivable scale, not
-        just these seven) chosen to keep the search decoupled from that specific guarantee, at zero real cost
-        for a function that runs once per block. Try 3.7: it rounds to 4 (E), already in C major &mdash; the
-        search below never even runs. The
-        outward search only ever fires for a chromatic note that's <em>genuinely</em> off-scale after rounding,
-        not for "in-between" frequencies &mdash; those are resolved by ordinary rounding, a step earlier.</figcaption>
+        &mdash; the note squarely between them is always one semitone from one side or the other. 6 is a generic
+        worst-case bound instead: half the 12-semitone chromatic octave, exactly what a hypothetical
+        <strong>single-note scale</strong> would need &mdash; the sparsest membership set possible, where the one
+        farthest chromatic note sits on the opposite side of the circle, 6 semitones away. Today's largest actual
+        gap is a whole tone, so that reach is never exercised &mdash; the bound is sized for a case this codebase
+        doesn't currently support, not for the seven modes it does. Try 3.7: it rounds to 4 (E), already in C
+        major &mdash; the search below never even runs. The outward search only ever fires for a chromatic note
+        that's <em>genuinely</em> off-scale after rounding, not for "in-between" frequencies &mdash; those are
+        resolved by ordinary rounding, a step earlier.</figcaption>
     </figure>
 
     <div class="math-card amber">
