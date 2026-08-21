@@ -496,17 +496,21 @@
       <h2>Snapping to the scale: outward search, ties go low</h2>
       <p>Twelve pitch classes, wrapped into an octave. If the detected note is already one of the scale's own
         notes, it passes through untouched. If not, the search walks outward by semitone &mdash; one below, one
-        above, two below, two above &mdash; until it lands on one that belongs.</p>
+        above, two below, two above &mdash; until it lands on one that belongs. This is genuinely two separate
+        steps, not one: a detected frequency is <strong>continuous</strong> (say, pitch-class 3.7, not a clean
+        integer), so it's rounded to the nearest chromatic semitone <em>first</em>, with ordinary rounding &mdash;
+        completely independent of the scale. Only <em>that</em> already-integer result ever reaches the search
+        below. A frequency that rounds up to a note already in the scale never touches the search at all.</p>
     </div>
 
     <figure>
       <div class="fig-frame">
         <div class="demo-controls">
-          <label for="pcSlider">detected pitch class</label>
-          <input type="range" id="pcSlider" min="0" max="11" step="1" value="6" aria-describedby="pcReadout">
-          <span class="demo-readout" id="pcReadout" aria-live="polite">pc 6 &middot; searching&hellip;</span>
+          <label for="pcSlider">detected pitch (continuous)</label>
+          <input type="range" id="pcSlider" min="0" max="11.4" step="0.1" value="3.7" aria-describedby="pcReadout">
+          <span class="demo-readout" id="pcReadout" aria-live="polite">pc 3.7 &middot; searching&hellip;</span>
         </div>
-        <svg viewBox="0 0 900 230" role="img" aria-label="A twelve pitch-class wheel. Drag the slider to pick any detected pitch class and watch the outward search live: already-in-scale notes pass through, everything else searches below first, then above, by increasing distance.">
+        <svg viewBox="0 0 900 230" role="img" aria-label="A twelve pitch-class wheel. Drag the slider to pick any continuous detected pitch and watch both real steps live: it first rounds to the nearest chromatic semitone, independent of the scale, and only then, if that landed outside the scale, searches outward below first, then above.">
           <text x="20" y="26" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">pitch classes 0&ndash;11, C major shown &mdash; scale members filled, non-members hollow</text>
 
           <!-- 12 pitch class dots, static -->
@@ -538,15 +542,18 @@
       </div>
       <figcaption>Distance only ever needs to search 1&ndash;6 semitones &mdash; any seven-note scale's worst-case
         gap between neighbors is a whole tone (2 semitones) either side, so 6 is generous headroom, not a tight
-        bound. Drag through all 12 and notice every non-member note resolves at distance 1 for this scale &mdash;
-        real diatonic scales never actually need the extra reach the code defensively allows for.</figcaption>
+        bound. Try 3.7: it rounds to 4 (E), already in C major &mdash; the search below never even runs. The
+        outward search only ever fires for a chromatic note that's <em>genuinely</em> off-scale after rounding,
+        not for "in-between" frequencies &mdash; those are resolved by ordinary rounding, a step earlier.</figcaption>
     </figure>
 
     <div class="math-card amber">
       <div class="mc-label">the math</div>
-      <div class="math-line"><span class="k">pitch class</span><span class="v">pc(note) = ((note mod 12) + 12) mod 12&nbsp;&mdash;&nbsp;the extra +12 handles negative notes safely</span></div>
-      <div class="math-line"><span class="k">membership</span><span class="v">if scale.contains(pc(note)): return note unchanged</span></div>
-      <div class="math-line"><span class="k">search order</span><span class="v">for d in 1..6: check pc(note&minus;d), then pc(note+d) &mdash; first match wins, below beats above on a tie</span></div>
+      <div class="math-line"><span class="k">1. round to chromatic</span><span class="v">note = round(hzToMidi(freq))&nbsp;&mdash;&nbsp;ordinary nearest-integer rounding, before the scale is ever consulted</span></div>
+      <div class="math-line"><span class="k">2. pitch class</span><span class="v">pc(note) = ((note mod 12) + 12) mod 12&nbsp;&mdash;&nbsp;the extra +12 handles negative notes safely</span></div>
+      <div class="math-line"><span class="k">3. membership</span><span class="v">if scale.contains(pc(note)): return note unchanged</span></div>
+      <div class="math-line"><span class="k">4. search order</span><span class="v">for d in 1..6: check pc(note&minus;d), then pc(note+d) &mdash; first match wins, below beats above on a tie</span></div>
+      <div class="cite"><a href="https://github.com/mcfredrick/pitchzazz/blob/3d859da3812cef37c848b83cb15d0ffbecaafd4b/cpp-plugin/Source/DSP/Corrector.cpp#L53" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3H3v10h10v-3M9 3h4v4M13 3L7 9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Corrector.cpp<span class="sha">:53 @ 3d859da</span></a></div>
       <div class="cite"><a href="https://github.com/mcfredrick/pitchzazz/blob/3d859da3812cef37c848b83cb15d0ffbecaafd4b/cpp-plugin/Source/DSP/Scale.cpp#L55" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3H3v10h10v-3M9 3h4v4M13 3L7 9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Scale.cpp<span class="sha">:55 @ 3d859da</span></a></div>
     </div>
   </section>
@@ -1183,7 +1190,11 @@
   render();
 })();
 
-// ---- Scale quantization: drag the detected pitch class, watch the search ----
+// ---- Scale quantization: drag a CONTINUOUS detected pitch, watch both
+// real stages — round to nearest chromatic semitone first (independent
+// of the scale), then search for an in-scale note only if that rounded
+// integer needs it. Mirrors Corrector.cpp's actual two-step pipeline:
+// round(hzToMidi(freq)) happens before nearestInScaleMidi ever runs. ----
 (function(){
   var slider = document.getElementById('pcSlider');
   var readout = document.getElementById('pcReadout');
@@ -1207,17 +1218,50 @@
   }
 
   function render(){
-    var pc = parseInt(slider.value, 10);
-    var r = search(pc);
-    var already = inScale(pc);
-    readout.textContent = already ? ('pc '+pc+' → in scale') : ('pc '+pc+' → d'+r.d+' '+r.dir+' → pc '+r.result);
+    var detected = parseFloat(slider.value);
+    var rounded = Math.max(0, Math.min(11, Math.round(detected)));
+    var r = search(rounded);
+    var already = inScale(rounded);
+    readout.textContent = 'pc ' + detected.toFixed(1) + ' → ' + rounded
+      + (already ? ' → in scale' : (' → d' + r.d + ' ' + r.dir + ' → ' + r.result));
 
     var ns = 'http://www.w3.org/2000/svg';
     while (group.firstChild) group.removeChild(group.firstChild);
 
+    // Stage 1: the continuous detected value, NOT snapped to the grid —
+    // an amber diamond floating above the row at its raw position.
+    var dx = xFor(detected), dTopY = cy - 46;
+    var diamond = document.createElementNS(ns,'path');
+    var s = 6;
+    diamond.setAttribute('d', 'M '+dx+' '+(dTopY-s)+' L '+(dx+s)+' '+dTopY+' L '+dx+' '+(dTopY+s)+' L '+(dx-s)+' '+dTopY+' Z');
+    diamond.setAttribute('fill', '#ffb020');
+    group.appendChild(diamond);
+    var dlab = document.createElementNS(ns,'text');
+    dlab.setAttribute('x', Math.max(95, Math.min(773, dx))); dlab.setAttribute('y', dTopY - 12);
+    dlab.setAttribute('text-anchor','middle'); dlab.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace');
+    dlab.setAttribute('font-size','11.5'); dlab.setAttribute('font-weight','600'); dlab.setAttribute('fill','#ffb020');
+    dlab.textContent = 'detected: pc ' + detected.toFixed(1);
+    group.appendChild(dlab);
+
+    // Stage 1 -> rounding arrow, continuous position down to the nearest dot.
+    var rx = xFor(rounded);
+    var rline = document.createElementNS(ns,'line');
+    rline.setAttribute('x1', dx); rline.setAttribute('y1', dTopY + s);
+    rline.setAttribute('x2', rx); rline.setAttribute('y2', cy - 16);
+    rline.setAttribute('stroke', '#ffb020'); rline.setAttribute('stroke-width', '1.4'); rline.setAttribute('stroke-dasharray', '2 3');
+    rline.setAttribute('marker-end', 'url(#qArrow)');
+    group.appendChild(rline);
+    var rlab = document.createElementNS(ns,'text');
+    rlab.setAttribute('x', (dx+rx)/2 + (rx>dx?10:-10)); rlab.setAttribute('y', dTopY + 4);
+    rlab.setAttribute('text-anchor', rx>=dx ? 'start' : 'end'); rlab.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace');
+    rlab.setAttribute('font-size','10'); rlab.setAttribute('fill','#8a8d9c');
+    rlab.textContent = 'round';
+    group.appendChild(rlab);
+
+    // Stage 2: only drawn if the rounded chromatic note needs an in-scale search.
     if (already){
       var ring = document.createElementNS(ns,'circle');
-      ring.setAttribute('cx', xFor(pc)); ring.setAttribute('cy', cy); ring.setAttribute('r', 17);
+      ring.setAttribute('cx', rx); ring.setAttribute('cy', cy); ring.setAttribute('r', 17);
       ring.setAttribute('fill','none'); ring.setAttribute('stroke','#39ff88'); ring.setAttribute('stroke-width','2');
       group.appendChild(ring);
     } else {
@@ -1226,7 +1270,7 @@
       ring2.setAttribute('fill','none'); ring2.setAttribute('stroke','#39ff88'); ring2.setAttribute('stroke-width','2');
       group.appendChild(ring2);
 
-      var x1 = xFor(pc), x2 = xFor(r.result);
+      var x1 = rx, x2 = xFor(r.result);
       var mid = (x1+x2)/2;
       var path = document.createElementNS(ns,'path');
       var sign = x2 < x1 ? -1 : 1;
@@ -1237,24 +1281,17 @@
     }
 
     var dot = document.createElementNS(ns,'circle');
-    dot.setAttribute('cx', xFor(pc)); dot.setAttribute('cy', cy); dot.setAttribute('r', 5);
+    dot.setAttribute('cx', rx); dot.setAttribute('cy', cy); dot.setAttribute('r', 5);
     dot.setAttribute('fill', '#ffb020');
     group.appendChild(dot);
-
-    var lab = document.createElementNS(ns,'text');
-    lab.setAttribute('x', Math.max(95, Math.min(773, xFor(pc)))); lab.setAttribute('y', 78);
-    lab.setAttribute('text-anchor','middle'); lab.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace');
-    lab.setAttribute('font-size','11.5'); lab.setAttribute('font-weight','600'); lab.setAttribute('fill','#ffb020');
-    lab.textContent = 'detected: pc ' + pc + ' (' + names[pc] + ')';
-    group.appendChild(lab);
 
     var res = document.createElementNS(ns,'text');
     res.setAttribute('x', 450); res.setAttribute('y', 195);
     res.setAttribute('text-anchor','middle'); res.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace');
     res.setAttribute('font-size','11'); res.setAttribute('fill','#39ff88');
     res.textContent = already
-      ? ('already in scale — pass through unchanged')
-      : ('d='+r.d+', '+r.dir+' → corrected to pc '+r.result+' ('+names[r.result]+')');
+      ? ('rounds to pc ' + rounded + ' (' + names[rounded] + ') — already in scale, search never runs')
+      : ('rounds to pc ' + rounded + ' (' + names[rounded] + ') — d=' + r.d + ' ' + r.dir + ' → pc ' + r.result + ' (' + names[r.result] + ')');
     group.appendChild(res);
   }
 
