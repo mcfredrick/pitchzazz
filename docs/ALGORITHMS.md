@@ -274,11 +274,15 @@ on a note that's in the scale; on a tie, the note below wins.
    major-scale step pattern (W-W-H-W-W-W-H — `Scale.cpp:14-20`), so the
    largest possible gap between two scale members is always exactly a
    whole tone, for every mode, not just major — verified by
-   construction, not assumed. 6 is a generic worst-case bound instead
-   (half the 12-semitone chromatic octave — the true worst case for
-   *any* conceivable pitch-class membership set, including ones this
-   codebase doesn't currently support), chosen to keep the search
-   decoupled from `intervalsFor()`'s specific interval tables rather
+   construction, not assumed. 6 is a generic worst-case bound instead:
+   half the 12-semitone chromatic octave — exactly what a hypothetical
+   **single-note scale** would need, the sparsest membership set
+   possible, where the one farthest chromatic note sits on the
+   opposite side of the circle, 6 semitones away. This codebase
+   doesn't currently support anything that sparse, so that reach is
+   never exercised — the bound is sized for a case beyond today's
+   seven modes, chosen to keep the search decoupled from
+   `intervalsFor()`'s specific interval tables rather
    than hard-coding an assumption that would silently need revisiting
    if a sparser scale type were ever added. Free either way — this runs
    once per audio block.
