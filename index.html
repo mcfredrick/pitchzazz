@@ -873,6 +873,7 @@
       <div class="mc-label">the math</div>
       <div class="math-line"><span class="k">both engines run</span><span class="v">for crossfadeBlocks = 4 blocks (&asymp;185ms @ 44.1kHz/2048), old and new both process the <em>same</em> input</span></div>
       <div class="math-line"><span class="k">equal-power blend</span><span class="v">gainOld = cos(&theta;), gainNew = sin(&theta;), &theta; ramped 0&rarr;&pi;/2 continuously across the whole window</span></div>
+      <div class="math-line"><span class="k">why it's exactly 1</span><span class="v">sin&sup2;&theta; + cos&sup2;&theta; &equiv; 1 for <em>any</em> &theta; &mdash; the Pythagorean identity, not a normalization step. Same angle both times, not two complementary angles summing to 90&deg;.</span></div>
       <div class="math-line"><span class="k">why not linear</span><span class="v">linear (1&minus;t)/t dips below full power mid-transition (gainOld&sup2;+gainNew&sup2; &lt; 1); equal-power keeps the sum exactly 1 throughout</span></div>
       <div class="cite"><a href="https://github.com/mcfredrick/pitchzazz/blob/3d859da3812cef37c848b83cb15d0ffbecaafd4b/cpp-plugin/Source/DSP/CorrectorWorker.cpp#L74" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3H3v10h10v-3M9 3h4v4M13 3L7 9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>CorrectorWorker.cpp<span class="sha">:74 @ 3d859da</span></a></div>
     </div>
