@@ -219,6 +219,15 @@
     font-family:var(--mono); font-size:14px; color:var(--magenta);
     width:29ch; flex:none; text-align:right; font-variant-numeric:tabular-nums;
   }
+  .play-btn{
+    font-family:var(--mono); font-size:12.5px; color:var(--ink);
+    background:var(--panel-raised); border:1px solid var(--line); border-radius:8px;
+    padding:7px 14px; cursor:pointer; white-space:nowrap; flex:none;
+    transition:border-color .15s ease, color .15s ease;
+  }
+  .play-btn:hover{ border-color:var(--magenta); color:var(--magenta); }
+  .play-btn:focus-visible{ outline:2px solid var(--magenta); outline-offset:2px; }
+  .play-btn:disabled{ opacity:0.5; cursor:default; }
 
   /* ---------- comparison table ---------- */
   .compare{ overflow-x:auto; margin-bottom:20px; }
@@ -787,43 +796,66 @@
 
     <figure>
       <div class="fig-frame">
-        <svg viewBox="0 0 900 220" role="img" aria-label="The UI picks a new engine, which is constructed off the audio thread and stored into one atomic pointer. The worker thread picks it up on its next block via an acquire exchange, then crossfades from the old engine to the new one over four blocks using equal-power gains.">
-          <text x="20" y="24" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">atomic pointer handoff, picked up between blocks &mdash; never mid-process()</text>
+        <div class="demo-controls">
+          <label for="hsStepSlider">step</label>
+          <input type="range" id="hsStepSlider" min="1" max="6" step="1" value="1" aria-describedby="hsStepReadout">
+          <button type="button" id="hsPlayBtn" class="play-btn">&#9654; play</button>
+          <span class="demo-readout" id="hsStepReadout" aria-live="polite">1/6 &middot; UI picks engine</span>
+        </div>
+        <svg viewBox="0 0 900 220" role="img" aria-label="Step through the handoff: the UI picks a new engine, which is constructed off the audio thread and stored into one atomic pointer with release ordering. The worker thread picks it up on its next block via an acquire exchange, then crossfades from the old engine to the new one over four blocks using equal-power gains.">
+          <text x="20" y="24" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">atomic pointer handoff, picked up between blocks &mdash; never mid-process() &mdash; drag through the steps</text>
 
-          <rect x="20" y="70" width="140" height="64" rx="9" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
-          <text x="90" y="97" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">UI: pick engine<title>UI: User Interface</title></text>
-          <text x="90" y="112" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">message thread</text>
+          <g id="hsBox1">
+            <rect x="20" y="70" width="140" height="64" rx="9" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+            <text x="90" y="97" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">UI: pick engine<title>UI: User Interface</title></text>
+            <text x="90" y="112" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">message thread</text>
+          </g>
 
-          <rect x="205" y="70" width="170" height="64" rx="9" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
-          <text x="290" y="97" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">requestEngineSwap()</text>
-          <text x="290" y="112" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">construct off-thread</text>
+          <g id="hsBox2">
+            <rect x="205" y="70" width="170" height="64" rx="9" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+            <text x="290" y="97" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">requestEngineSwap()</text>
+            <text x="290" y="112" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">construct off-thread</text>
+          </g>
 
-          <rect x="420" y="64" width="140" height="76" rx="9" fill="#1b1e27" stroke="#ff3fa4" stroke-width="2.2"/>
-          <text x="490" y="94" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#ff3fa4">pendingEngine</text>
-          <text x="490" y="109" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">atomic pointer</text>
+          <g id="hsBox3">
+            <rect x="420" y="64" width="140" height="76" rx="9" fill="#1b1e27" stroke="#ff3fa4" stroke-width="2.2"/>
+            <text x="490" y="94" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#ff3fa4">pendingEngine</text>
+            <text x="490" y="109" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">atomic pointer</text>
+          </g>
 
-          <rect x="605" y="70" width="150" height="64" rx="9" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
-          <text x="680" y="97" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">worker, next block</text>
-          <text x="680" y="112" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">exchange (acquire)</text>
+          <g id="hsBox4">
+            <rect x="605" y="70" width="150" height="64" rx="9" fill="#1b1e27" stroke="#2c3140" stroke-width="1.4"/>
+            <text x="680" y="97" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#f1f1f6">worker, next block</text>
+            <text x="680" y="112" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">exchange (acquire)</text>
+          </g>
 
-          <rect x="800" y="60" width="80" height="84" rx="9" fill="#1b1e27" stroke="#39ff88" stroke-width="2.2"/>
-          <text x="840" y="94" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#39ff88">cross-</text>
-          <text x="840" y="108" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#39ff88">fade</text>
-          <text x="840" y="122" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9" fill="#8a8d9c">4 blocks</text>
+          <g id="hsBox5">
+            <rect x="800" y="60" width="80" height="84" rx="9" fill="#1b1e27" stroke="#39ff88" stroke-width="2.2"/>
+            <text x="840" y="94" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#39ff88">cross-</text>
+            <text x="840" y="108" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#39ff88">fade</text>
+            <text x="840" y="122" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9" fill="#8a8d9c">4 blocks</text>
+          </g>
 
-          <line x1="160" y1="102" x2="201" y2="102" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#hsArrow)"/>
-          <line x1="375" y1="102" x2="416" y2="102" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#hsArrow)"/>
-          <text x="396" y="52" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">store (release)</text>
-          <line x1="560" y1="102" x2="601" y2="102" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#hsArrow)"/>
-          <line x1="755" y1="102" x2="796" y2="102" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#hsArrow)"/>
+          <g id="hsArrow1"><line x1="160" y1="102" x2="201" y2="102" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#hsArrow)"/></g>
+          <g id="hsArrow2">
+            <line x1="375" y1="102" x2="416" y2="102" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#hsArrow)"/>
+            <text x="396" y="52" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c">store (release)</text>
+          </g>
+          <g id="hsArrow3"><line x1="560" y1="102" x2="601" y2="102" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#hsArrow)"/></g>
+          <g id="hsArrow4"><line x1="755" y1="102" x2="796" y2="102" stroke="#8a8d9c" stroke-width="1.5" marker-end="url(#hsArrow)"/></g>
           <defs><marker id="hsArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8d9c"/></marker></defs>
+
+          <g id="hsState"></g>
+          <g id="hsDone"></g>
 
           <text x="450" y="190" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" font-style="italic" fill="#8a8d9c">a second swap requested mid-crossfade just replaces the pending pointer &mdash; the worker only ever acts on the latest request</text>
         </svg>
       </div>
       <figcaption>An instant switch alone discarded the outgoing engine's warmed-up phase accumulator and
-        overlap-add buffer &mdash; a real, measured 0.340 max-sample discontinuity against a 0.014 natural
-        baseline (~24&times;), caught by a dedicated dropout test, not by ear.</figcaption>
+        overlap-add buffer &mdash; heard first as an audible click while testing engine swaps live, which is
+        what prompted crossfading between engines in the first place. A dedicated dropout test was built
+        afterward to quantify it precisely: a real, measured 0.340 max-sample discontinuity against a 0.014
+        natural baseline (~24&times;).</figcaption>
     </figure>
 
     <figure>
@@ -1491,6 +1523,127 @@
   }
 
   slider.addEventListener('input', render);
+  render();
+})();
+
+// ---- Hot-swap: step through the handoff, showing each component's
+// actual state at each step, not just which box is highlighted. ----
+(function(){
+  var slider = document.getElementById('hsStepSlider');
+  var readout = document.getElementById('hsStepReadout');
+  var playBtn = document.getElementById('hsPlayBtn');
+  var stateGroup = document.getElementById('hsState');
+  var doneGroup = document.getElementById('hsDone');
+  if (!slider || !stateGroup || !doneGroup) return;
+
+  var stepNames = [
+    'UI picks engine',
+    'constructed off-thread',
+    'stored (release)',
+    'exchange (acquire)',
+    'crossfade blending',
+    'fully switched over'
+  ];
+
+  // revealStep: the step at which each element first becomes visible.
+  var elements = [
+    { id: 'hsBox1',   revealStep: 1 },
+    { id: 'hsArrow1', revealStep: 2 },
+    { id: 'hsBox2',   revealStep: 2 },
+    { id: 'hsArrow2', revealStep: 3 },
+    { id: 'hsBox3',   revealStep: 3 },
+    { id: 'hsArrow3', revealStep: 4 },
+    { id: 'hsBox4',   revealStep: 4 },
+    { id: 'hsArrow4', revealStep: 5 },
+    { id: 'hsBox5',   revealStep: 5 }
+  ];
+
+  // What pendingEngine (the atomic pointer) actually holds at each step.
+  var pendingState = [
+    { text: 'null', color: '#8a8d9c' },
+    { text: 'null', color: '#8a8d9c' },
+    { text: 'holds NEW ptr', color: '#ff3fa4' },
+    { text: 'null (consumed)', color: '#8a8d9c' },
+    { text: 'null', color: '#8a8d9c' },
+    { text: 'null', color: '#8a8d9c' }
+  ];
+
+  // What's actually processing audio right now, at each step.
+  var activeState = [
+    { text: 'processing: OLD only', color: '#8a8d9c' },
+    { text: 'processing: OLD only', color: '#8a8d9c' },
+    { text: 'processing: OLD only', color: '#8a8d9c' },
+    { text: 'OLD + warming NEW', color: '#ffb020' },
+    { text: 'blending OLD + NEW', color: '#39ff88' },
+    { text: 'processing: NEW only', color: '#39ff88' }
+  ];
+
+  var playTimer = null;
+
+  function stopPlay(){
+    if (playTimer){ clearInterval(playTimer); playTimer = null; playBtn.textContent = '▶ play'; }
+  }
+
+  function render(){
+    var step = parseInt(slider.value, 10);
+    readout.textContent = step + '/6 · ' + stepNames[step-1];
+
+    elements.forEach(function(el){
+      var node = document.getElementById(el.id);
+      if (node) node.style.opacity = (el.revealStep <= step) ? '1' : '0.22';
+    });
+
+    var ns = 'http://www.w3.org/2000/svg';
+    while (stateGroup.firstChild) stateGroup.removeChild(stateGroup.firstChild);
+    while (doneGroup.firstChild) doneGroup.removeChild(doneGroup.firstChild);
+
+    if (step >= 3){
+      var pTag = document.createElementNS(ns,'text');
+      pTag.setAttribute('x', 490); pTag.setAttribute('y', 156);
+      pTag.setAttribute('text-anchor','middle'); pTag.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace');
+      pTag.setAttribute('font-size','10'); pTag.setAttribute('font-weight','600'); pTag.setAttribute('fill', pendingState[step-1].color);
+      pTag.textContent = 'pendingEngine: ' + pendingState[step-1].text;
+      stateGroup.appendChild(pTag);
+    }
+
+    if (step >= 1){
+      var aTag = document.createElementNS(ns,'text');
+      aTag.setAttribute('x', 720); aTag.setAttribute('y', 168);
+      aTag.setAttribute('text-anchor','middle'); aTag.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace');
+      aTag.setAttribute('font-size','10.5'); aTag.setAttribute('font-weight','600'); aTag.setAttribute('fill', activeState[step-1].color);
+      aTag.textContent = activeState[step-1].text;
+      stateGroup.appendChild(aTag);
+    }
+
+    if (step >= 6){
+      var ring = document.createElementNS(ns,'circle');
+      ring.setAttribute('cx', 840); ring.setAttribute('cy', 102); ring.setAttribute('r', 46);
+      ring.setAttribute('fill','none'); ring.setAttribute('stroke','#39ff88'); ring.setAttribute('stroke-width','2');
+      doneGroup.appendChild(ring);
+      var doneLab = document.createElementNS(ns,'text');
+      doneLab.setAttribute('x', 840); doneLab.setAttribute('y', 156);
+      doneLab.setAttribute('text-anchor','middle'); doneLab.setAttribute('font-family','ui-monospace,Menlo,Consolas,monospace');
+      doneLab.setAttribute('font-size','10'); doneLab.setAttribute('font-weight','600'); doneLab.setAttribute('fill','#39ff88');
+      doneLab.textContent = 'OLD engine released';
+      doneGroup.appendChild(doneLab);
+    }
+  }
+
+  slider.addEventListener('input', function(){ stopPlay(); render(); });
+
+  playBtn.addEventListener('click', function(){
+    if (playTimer){ stopPlay(); return; }
+    if (parseInt(slider.value, 10) >= 6) slider.value = '1';
+    playBtn.textContent = '■ stop';
+    playTimer = setInterval(function(){
+      var next = parseInt(slider.value, 10) + 1;
+      if (next > 6){ stopPlay(); return; }
+      slider.value = String(next);
+      render();
+    }, 1100);
+    render();
+  });
+
   render();
 })();
 </script>
