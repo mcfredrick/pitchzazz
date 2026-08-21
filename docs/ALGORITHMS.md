@@ -268,10 +268,20 @@ on a note that's in the scale; on a tie, the note below wins.
 3. Otherwise, search outward by semitone distance 1 through 6
    (`Scale.cpp:60-69`): at each distance, check **below first, then
    above** (`Scale.cpp:62-67`) — on a tie (equidistant in-scale notes on
-   both sides), the lower note wins. Distance only needs to go to 6
-   because any chromatic gap in a 7-note scale is at most a whole tone
-   (2 semitones) in the worst case for the *nearest* scale tone in either
-   direction combined — 6 is generous headroom, not a tight bound.
+   both sides), the lower note wins. The loop allows up to distance 6,
+   but never actually needs more than 1 for any of the seven `ScaleMode`
+   variants this type supports: all seven are rotations of the same
+   major-scale step pattern (W-W-H-W-W-W-H — `Scale.cpp:14-20`), so the
+   largest possible gap between two scale members is always exactly a
+   whole tone, for every mode, not just major — verified by
+   construction, not assumed. 6 is a generic worst-case bound instead
+   (half the 12-semitone chromatic octave — the true worst case for
+   *any* conceivable pitch-class membership set, including ones this
+   codebase doesn't currently support), chosen to keep the search
+   decoupled from `intervalsFor()`'s specific interval tables rather
+   than hard-coding an assumption that would silently need revisiting
+   if a sparser scale type were ever added. Free either way — this runs
+   once per audio block.
 4. Fallback: return the original note unchanged if no distance 1-6 search
    found anything — unreachable in practice since every `ScaleMode` here
    has 7 pitch classes (`Scale.cpp:71-75`), kept as a defensive
@@ -317,11 +327,23 @@ right, trivially testable against every scale type.
   exactly the kind of detail that's invisible until someone asks, so it's
   called out explicitly rather than left as an accidental artifact of
   loop order.
+- *If every supported mode's worst-case gap is only 1 semitone, why
+  does the loop allow up to 6 — why not just compare the nearest note
+  above and below directly?* Because 6 isn't derived from what the
+  seven `ScaleMode` variants happen to guarantee today (they'd only
+  ever need 1) — it's the generic worst case for *any* pitch-class
+  membership set on a 12-note chromatic octave (half of 12), chosen so
+  the search's correctness doesn't depend on an assumption
+  (`intervalsFor()`'s tables never producing a gap bigger than 2) that
+  would silently need revisiting if a sparser scale type were ever
+  added. The extra reach is genuinely never exercised by any mode
+  shipped today, but costs nothing to keep — this runs once per block.
 - *Does this ever produce audibly wrong results for chromatic or
   whole-tone-ish scales?* No — `containsPitchClass` handles a
   chromatic (all-12) scale as == every note in scale (`Scale.cpp:57`
-  short-circuits to pass-through for every input), and the search bound
-  of 6 covers every real 7-note diatonic mode's worst-case gap.
+  short-circuits to pass-through for every input). More generally: the
+  search bound of 6 is correct for every scale the type system can
+  express, not merely sufficient for the seven that exist today.
 
 ---
 
