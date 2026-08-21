@@ -480,6 +480,13 @@
     </figure>
 
     <div class="math-card cyan">
+      <div class="mc-label">why the formula looks like this</div>
+      <div class="math-line"><span class="k">1. square it</span><span class="v">x[n]&minus;x[n+&#964;] can land negative or positive &mdash; squaring makes every difference count as positive, and makes big mismatches count far more than small ones (a difference twice as large contributes four times as much, not twice)</span></div>
+      <div class="math-line"><span class="k">2. normalize by energy</span><span class="v">a raw difference score alone is meaningless &mdash; a loud passage and a quiet one score very differently at an equally good match, and different &#964; naturally have different energy in their windows regardless of periodicity. Dividing by m(&#964;), the energy actually present at that &#964;, turns "how big is the raw mismatch" into "what fraction of the available energy is unaccounted for" &mdash; genuinely comparable across every &#964;. That division is what turns the raw difference into NSDF.</span></div>
+      <div class="math-line"><span class="k">3. every &#964; at once</span><span class="v">O(&middot;) describes how the <em>worst-case</em> cost grows as input size N grows. Literally sliding a copy and comparing at every &#964; costs O(N&sup2;) &mdash; for this project's N=4096, that's ~16.8 million operations. Computing every &#964;'s score at once via FFT costs O(N&nbsp;log&nbsp;N) instead &mdash; 4096&times;log&#8322;(4096) = 4096&times;12 &asymp; 49,000 operations &mdash; about 340&times; less work, for the exact same set of numbers.</span></div>
+    </div>
+
+    <div class="math-card cyan">
       <div class="mc-label">the math</div>
       <div class="math-line"><span class="k">energy gate</span><span class="v">E&nbsp;=&nbsp;&Sigma;&nbsp;x[n]&sup2;&nbsp;&mdash;&nbsp;skip the block entirely if E &lt; 0.15</span></div>
       <div class="math-line"><span class="k">autocorrelation</span><span class="v"><abbr class="ac" tabindex="0" data-tip="Autocorrelation Function — how well a signal matches a delayed copy of itself, at a given lag">ACF</abbr>(&#964;) = <abbr class="ac" tabindex="0" data-tip="Inverse Fast Fourier Transform — the FFT run backward, frequency domain to time domain">IFFT</abbr>( |<abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform — converts a signal between the time and frequency domains in O(N log N)">FFT</abbr>(x)|&sup2; )&nbsp;&mdash;&nbsp;Wiener&ndash;Khinchin, O(N log N) instead of O(N&sup2;)</span></div>
