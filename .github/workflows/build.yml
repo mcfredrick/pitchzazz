@@ -861,6 +861,41 @@ jobs:
           echo "Files for release:"
           ls -la "$RELEASE_DIR/" 2>/dev/null || echo "  (none found)"
 
+          # ── Release notes ────────────────────────────────────────────
+          # Static text, not --generate-notes (which only produces a
+          # commit/PR changelog): this audience needs to know which file
+          # to grab per platform and how to get past Gatekeeper/
+          # SmartScreen on an unsigned build — no signing certs are
+          # configured for this project (cpp-plugin/.env's Apple
+          # Developer Settings are blank), so both installers are
+          # unsigned by design, not by omission. Building the notes here
+          # avoids depending on whether the installed gh CLI version
+          # supports combining --notes-file with --generate-notes.
+          PKG_NAME=$(find "$RELEASE_DIR" -name "*.pkg" -type f | head -1 | xargs -r basename)
+          WIN_NAME=$(find "$RELEASE_DIR" -name "*Setup*" -type f | head -1 | xargs -r basename)
+          NOTES_FILE="$RUNNER_TEMP/release_notes.md"
+          {
+            echo "Real-time pitch-correction plugin (AU / VST3 / CLAP / Standalone), built from this repo's C++/JUCE implementation."
+            echo ""
+            echo "### Install"
+            echo ""
+            if [ -n "$PKG_NAME" ]; then
+              echo "**macOS** — download \`$PKG_NAME\`, double-click it, and follow the installer. It places the AU, VST3, and CLAP plugins in their standard system locations and copies the Standalone app to /Applications."
+              echo ""
+              echo "This build is **unsigned** (no Apple Developer certificate is configured for this project). Gatekeeper will refuse a plain double-click. Right-click (Control-click) the \`.pkg\` → **Open** → **Open** again in the dialog — or go to **System Settings → Privacy & Security** and click **Open Anyway** after the first blocked attempt."
+              echo ""
+            fi
+            if [ -n "$WIN_NAME" ]; then
+              echo "**Windows** — download \`$WIN_NAME\`, run it, and follow the installer. It places the VST3 and CLAP plugins in the standard Common Files location and installs the Standalone app."
+              echo ""
+              echo "This build is **unsigned** (no code-signing certificate is configured for this project). SmartScreen will show \"Windows protected your PC\" on first run — click **More info** → **Run anyway** to proceed."
+              echo ""
+            fi
+            echo "### Prefer to build it yourself?"
+            echo ""
+            echo "See [cpp-plugin/README.md](https://github.com/${{ github.repository }}/blob/main/cpp-plugin/README.md) — it's a standard CMake/JUCE build (\`./scripts/build.sh vst3\`)."
+          } > "$NOTES_FILE"
+
           # Draft flag (draft mode creates a draft release for review)
           DRAFT_FLAG=""
           if [ "${{ needs.detect_platforms.outputs.draft_release }}" = "true" ]; then
@@ -885,7 +920,7 @@ jobs:
           if ls "$RELEASE_DIR"/* &>/dev/null; then
             gh release create "$TAG" \
               --title "${{ env.PRODUCT_NAME }} ${VERSION}" \
-              --generate-notes \
+              --notes-file "$NOTES_FILE" \
               $DRAFT_FLAG \
               $REPO_FLAG \
               "$RELEASE_DIR"/* 2>/dev/null || \
@@ -893,7 +928,7 @@ jobs:
           else
             gh release create "$TAG" \
               --title "${{ env.PRODUCT_NAME }} ${VERSION}" \
-              --generate-notes \
+              --notes-file "$NOTES_FILE" \
               $DRAFT_FLAG \
               $REPO_FLAG 2>/dev/null || true
           fi
