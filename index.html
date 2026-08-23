@@ -637,8 +637,70 @@
             <g id="binDynamic"></g>
           </svg>
         </div>
-        <figcaption>Shift &gt; 1: several source bins collide into one destination bin (magnitudes add). Shift &lt; 1:
+        <figcaption>Shift &lt; 1 (pitch down): several source bins collide into one destination bin (magnitudes add). Shift &gt; 1 (pitch up):
           some destination bins never get written at all. This collision/gap pattern <em>is</em> the pitch shift.</figcaption>
+      </figure>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 900 260" role="img" aria-label="A phasor diagram: the bin's phase at the previous frame, the phase a nominal-frequency signal would be expected to reach after one hop, and the actually measured phase. The small residual angle between expected and measured is the phase difference that reveals the bin's true instantaneous frequency.">
+            <text x="20" y="24" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">phase difference &rarr; true frequency &mdash; one bin, two consecutive frames</text>
+
+            <circle cx="230" cy="140" r="85" fill="none" stroke="#2c3140" stroke-width="1.2" stroke-dasharray="2 5"/>
+            <circle cx="230" cy="140" r="2.5" fill="#8a8d9c"/>
+
+            <line x1="230" y1="140" x2="310" y2="111" stroke="#8a8d9c" stroke-width="1.8" marker-end="url(#pv1a)"/>
+            <text x="316" y="118" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#8a8d9c">&phi;&#8342;[t&minus;1]</text>
+
+            <path d="M 310 111 A 85 85 0 0 0 266 63" fill="none" stroke="#8a8d9c" stroke-width="1.4" stroke-dasharray="3 3" marker-end="url(#pv1b)"/>
+            <text x="298" y="72" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">expected: k&middot;2&pi;/oversampling</text>
+
+            <line x1="230" y1="140" x2="245" y2="56" stroke="#39ff88" stroke-width="2" marker-end="url(#pv1c)"/>
+            <text x="198" y="42" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#39ff88">&phi;&#8342;[t] (measured)</text>
+
+            <path d="M 266 63 A 85 85 0 0 0 245 56" fill="none" stroke="#ffb020" stroke-width="2.4"/>
+            <text x="200" y="30" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#ffb020">&Delta;&phi;&#8342;</text>
+
+            <text x="450" y="235" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" fill="#f1f1f6">&omega;&#8342; = nominal + &Delta;&phi;&#8342;&middot;oversampling</text>
+            <text x="450" y="252" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#8a8d9c">the residual angle is a frequency estimate finer than the bin spacing itself</text>
+
+            <defs>
+              <marker id="pv1a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8d9c"/></marker>
+              <marker id="pv1b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8d9c"/></marker>
+              <marker id="pv1c" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#39ff88"/></marker>
+            </defs>
+          </svg>
+        </div>
+        <figcaption>Each frame's measured phase lands slightly off where the bin's nominal center frequency alone would predict it to land. That residual, &Delta;&phi;&#8342;, is a direct measurement of the true frequency the bin's content is actually at &mdash; sub-bin-resolution information the magnitude spectrum alone can't give you.</figcaption>
+      </figure>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 900 260" role="img" aria-label="Two resynthesized waveforms across four hop boundaries. The top one resets phase every frame and shows a visible discontinuity at each boundary — audible as phasiness. The bottom one carries the phase accumulator forward across frames and stays smooth and continuous through every boundary.">
+            <text x="20" y="20" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">why phaseSum persists across frames</text>
+
+            <line x1="220" y1="10" x2="220" y2="245" stroke="#2c3140" stroke-width="1" stroke-dasharray="3 3"/>
+            <line x1="400" y1="10" x2="400" y2="245" stroke="#2c3140" stroke-width="1" stroke-dasharray="3 3"/>
+            <line x1="580" y1="10" x2="580" y2="245" stroke="#2c3140" stroke-width="1" stroke-dasharray="3 3"/>
+            <line x1="760" y1="10" x2="760" y2="245" stroke="#2c3140" stroke-width="1" stroke-dasharray="3 3"/>
+
+            <text x="40" y="42" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#ff3fa4">phase reset every frame (naive) &mdash; kinks at every hop boundary</text>
+            <polyline points="40,70 70,50 100,90 130,45 160,85 190,55 220,72" fill="none" stroke="#ff3fa4" stroke-width="1.8"/>
+            <polyline points="220,30 250,85 280,40 310,80 340,45 370,75 400,32" fill="none" stroke="#ff3fa4" stroke-width="1.8"/>
+            <polyline points="400,100 430,60 460,110 490,55 520,95 550,65 580,98" fill="none" stroke="#ff3fa4" stroke-width="1.8"/>
+            <polyline points="580,45 610,90 640,50 670,95 700,55 730,85 760,48" fill="none" stroke="#ff3fa4" stroke-width="1.8"/>
+            <polyline points="760,100 800,60 830,95 860,70" fill="none" stroke="#ff3fa4" stroke-width="1.8"/>
+            <circle cx="220" cy="72" r="3" fill="#ff3fa4"/><circle cx="220" cy="30" r="3" fill="#ff3fa4"/>
+            <circle cx="400" cy="32" r="3" fill="#ff3fa4"/><circle cx="400" cy="100" r="3" fill="#ff3fa4"/>
+            <circle cx="580" cy="98" r="3" fill="#ff3fa4"/><circle cx="580" cy="45" r="3" fill="#ff3fa4"/>
+            <circle cx="760" cy="48" r="3" fill="#ff3fa4"/><circle cx="760" cy="100" r="3" fill="#ff3fa4"/>
+
+            <text x="40" y="150" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" fill="#39ff88">phaseSum carried forward (actual implementation) &mdash; continuous through every boundary</text>
+            <polyline points="40,190 60,168 80,168 100,190 120,212 140,212 160,190 180,168 200,168 220,190 240,212 260,212 280,190 300,168 320,168 340,190 360,212 380,212 400,190 420,168 440,168 460,190 480,212 500,212 520,190 540,168 560,168 580,190 600,212 620,212 640,190 660,168 680,168 700,190 720,212 740,212 760,190 780,168 800,168 820,190 840,212 860,212"
+                      fill="none" stroke="#39ff88" stroke-width="2"/>
+          </svg>
+        </div>
+        <figcaption>Same four hop boundaries (dashed), two resynthesis strategies. Reset the phase every frame and each boundary becomes an audible discontinuity &mdash; the classic "phasiness" artifact. Carry <code>phaseSum</code> forward across frames, which is what <code>PitchShifter.cpp</code> actually does, and the waveform stays phase-continuous through every boundary instead.</figcaption>
       </figure>
 
       <div class="math-card green">
@@ -689,6 +751,43 @@
           grains sum cleanly, exactly like the phase vocoder's frame window above, just centered on a pitch mark
           instead of a fixed clock. Drag to 0 semitones: 1:1 spacing, nothing changes &mdash; the whole mechanism
           is re-spacing, never re-touching a grain's own content.</figcaption>
+      </figure>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 900 300" role="img" aria-label="Three rows compare the same pitch-up shift. Top: a reference waveform, four repeating cycles. Middle: naive resampling shrinks both the spacing and the internal shape of each cycle together, changing the formants — the chipmunk effect. Bottom: TD-PSOLA re-spaces identical, unmodified grains closer together so they overlap, while each grain's own internal shape stays exactly the same as the reference.">
+            <text x="20" y="20" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">original &mdash; 4 cycles, one period each (reference)</text>
+            <line x1="40" y1="70" x2="240" y2="70" stroke="#2c3140" stroke-width="1"/>
+            <polyline points="40,70 47,35 56,81 65,65 85,70 92,35 101,81 112,65 130,70 137,35 146,81 157,65 175,70 182,35 191,81 202,65 220,70" fill="none" stroke="#8a8d9c" stroke-width="2"/>
+
+            <text x="20" y="100" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#ff3fa4">naive resample &times;1.5 (chipmunk): the cycle's own shape compresses along with the spacing</text>
+            <line x1="40" y1="150" x2="240" y2="150" stroke="#2c3140" stroke-width="1"/>
+            <polyline points="40,150 45,115 51,161 58,145 70,150 75,115 81,161 88,145 100,150 105,115 111,161 118,145 130,150 135,115 141,161 148,145 160,150 165,115 171,161 178,145 190,150 195,115 201,161 208,145 220,150" fill="none" stroke="#ff3fa4" stroke-width="2"/>
+
+            <text x="20" y="180" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#39ff88">TD-PSOLA &times;1.5: identical grain content, just re-spaced closer &mdash; grains overlap, shape never touched</text>
+            <g stroke="#39ff88" stroke-width="1" stroke-dasharray="3 3" fill="none" opacity="0.35">
+              <rect x="40" y="185" width="45" height="70" rx="4"/>
+              <rect x="70" y="185" width="45" height="70" rx="4"/>
+              <rect x="100" y="185" width="45" height="70" rx="4"/>
+              <rect x="130" y="185" width="45" height="70" rx="4"/>
+              <rect x="160" y="185" width="45" height="70" rx="4"/>
+              <rect x="190" y="185" width="45" height="70" rx="4"/>
+            </g>
+            <g stroke="#39ff88" stroke-width="2" fill="none" opacity="0.6">
+              <polyline points="40,230 47,195 56,241 67,225 85,230"/>
+              <polyline points="70,230 77,195 86,241 97,225 115,230"/>
+              <polyline points="100,230 107,195 116,241 127,225 145,230"/>
+              <polyline points="130,230 137,195 146,241 157,225 175,230"/>
+              <polyline points="160,230 167,195 176,241 187,225 205,230"/>
+              <polyline points="190,230 197,195 206,241 217,225 235,230"/>
+            </g>
+          </svg>
+        </div>
+        <figcaption>Same 1.5&times; pitch-up target, two different mechanisms. Naive resampling reads the waveform
+          faster, so each cycle's own shape shrinks along with the spacing between cycles &mdash; that's the
+          formant shift (the "chipmunk" effect). TD-PSOLA instead re-spaces identical, unmodified grains closer
+          together, overlapping via the Hann taper &mdash; the cycle shape, and the formants encoded in it, never
+          change.</figcaption>
       </figure>
 
       <div class="math-card green">
