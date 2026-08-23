@@ -401,7 +401,9 @@ uses 8, matched on both engines).
    is the actual pitch-shift step: reading content from bin `k` but
    *placing* it at the shifted bin index remaps the spectrum's frequency
    content by the shift ratio. Multiple source bins can collide into the
-   same destination bin (shift > 1) or leave gaps (shift < 1); magnitudes
+   same destination bin (shift < 1, pitch down — consecutive `k` round to
+   indices less than 1 apart) or leave gaps (shift > 1, pitch up —
+   consecutive `k` round to indices more than 1 apart); magnitudes
    accumulate additively into a collided bin
    (`synthesizedMagnitude[index] += magnitude`), frequency is overwritten
    (`synthesizedFrequency[index] = ...`).
