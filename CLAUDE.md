@@ -13,7 +13,24 @@ Read `docs/ARCHITECTURE.md` before touching `pitch-cli/src/main.rs`. Read
 section tying roadmap priority to a specific target job description.
 Weigh new work against that section before adding it to a phase.
 
-## Current status (last updated 2026-08-17)
+## Current status (last updated 2026-08-23)
+
+- **Interview-demo consolidation (2026-08-23): done.** The plugin editor
+  gained a right-hand column — a stacked BEFORE/AFTER waveform scope, a
+  magnitude spectrum (linear frequency axis, filled-area rendering so it
+  reads as distinct from the scope rather than a second waveform), a
+  one-octave piano-keyboard scale visualizer (lit keys = current scale
+  membership, amber marker = detected pitch, green ring = corrected
+  target), a Freeze control, and a Record button that writes raw
+  audio+frame-sequence sessions to disk for offline video review
+  (`scripts/stitch_recording.sh`). Also fixed a real bug
+  (`docs/FINDINGS.md` #29): local Standalone builds were ad-hoc signed, so
+  every rebuild silently dropped macOS's microphone permission —
+  `cpp-plugin/scripts/sign_dev_standalone.sh` signs with a stable local
+  identity instead. The demo itself was re-centered on the **live
+  plugin** (not the GitHub Pages notebook) as the primary interview
+  asset — see the cue sheet and GH-Pages `index.html`'s closing section
+  for the handoff between the two.
 
 - Phases 0-3 are done. Rust MVP (Phase 1) has a *measured* (impulse-probe,
   not analytical-estimate) end-to-end latency number — see
