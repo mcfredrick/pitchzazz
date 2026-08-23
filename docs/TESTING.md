@@ -313,3 +313,38 @@ it every block would change already-shipped behavior — the auto/manual
 interaction model that would need is a separate, deliberate decision, not
 assumed here. This exists as a tested, measured, callable function.
 `docs/FINDINGS.md` #26 has the full account.
+
+## Follow-up — checked against the actual operating range, then reverted
+
+The table above characterizes the algorithm across its full range, but
+this plugin's scale-correction feature doesn't use its full range.
+`nearestInScaleMidi()` over any of the 7 currently-implemented modes —
+each a rotation of the same major-scale step pattern, max 2-semitone gap
+between degrees — can never request more than **1 semitone** of
+scale-driven correction. Not a typical-case observation: exhaustively
+confirmed across every tonic × every mode × every chromatic note
+(`tests/DSP/ScaleTests.cpp`'s `[grain-width-fix]` case), so a future mode
+with a wider gap would fail that test rather than silently invalidating
+this reasoning.
+
+Re-measuring the fix specifically in that range (±0.5 to ±1.5 semitones,
+covering scale correction plus ordinary intonation slop) changed the
+conclusion:
+
+| Shift | Before (1.0x) | After (formula) |
+|---|---|---|
+| +0.5 st | 1.12% | 1.13% |
+| +1.0 st | 1.29% | 1.31% |
+| +1.5 st | 1.06% | 1.10% |
+
+Zero benefit, a small consistent regression — the default was already
+close to the unison baseline (0.56%) across the only range this feature
+can actually reach. The fix from #26 had been wired into production to
+make it audible; once this data existed, that wiring was reverted
+(`git revert`, keeping the honest commit history rather than rewriting
+it away) — **TD-PSOLA is accepted as-is** for this plugin's real use
+case. `chooseGrainWidthMultiplierForShift()`, its tests, and the
+wide-range data all stay: a real, characterized property of the
+algorithm, and a ready answer if a future feature (`docs/ROADMAP.md`'s
+MIDI-controlled "vocoder mode," which *would* request arbitrary large
+intervals) ever needs it. `docs/FINDINGS.md` #27 has the full account.
