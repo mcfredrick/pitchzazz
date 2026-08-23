@@ -111,3 +111,33 @@ TEST_CASE ("Quality-metrics probe: THD+N and artifact energy across engines and 
     }
     std::cout << std::endl;
 }
+
+TEST_CASE ("Quality-metrics probe: PSOLA before/after chooseGrainWidthMultiplierForShift", "[quality][grain-width-fix]")
+{
+    std::cout << std::fixed << std::setprecision (4);
+    std::cout << "\nshift,grainWidthMultiplier,thdPlusNPercent,thdPlusNValid,artifactEnergyPercent\n";
+
+    for (float shift : { -12.0f, -3.0f, 0.0f, 3.0f, 6.0f, 9.0f, 12.0f })
+    {
+        // Before: default multiplier (1.0), same as every number in the
+        // table above.
+        {
+            PSOLAPitchShifter shifter (sampleRate);
+            const auto result = measure (
+                [&] (const std::vector<float>& in, std::vector<float>& out) { shifter.shiftPitch (testFreq, shift, in, out); }, shift);
+            std::cout << shift << ",1.0000(before)," << result.thdPlusNPercent << "," << (result.thdPlusNValid ? "true" : "false")
+                       << "," << result.artifactEnergyPercent << "\n";
+        }
+        // After: the theory-derived multiplier for this shift.
+        {
+            const float multiplier = chooseGrainWidthMultiplierForShift (shift);
+            PSOLAPitchShifter shifter (sampleRate);
+            shifter.setGrainWidthMultiplier (multiplier);
+            const auto result = measure (
+                [&] (const std::vector<float>& in, std::vector<float>& out) { shifter.shiftPitch (testFreq, shift, in, out); }, shift);
+            std::cout << shift << "," << multiplier << "(after)," << result.thdPlusNPercent << "," << (result.thdPlusNValid ? "true" : "false")
+                       << "," << result.artifactEnergyPercent << "\n";
+        }
+    }
+    std::cout << std::endl;
+}

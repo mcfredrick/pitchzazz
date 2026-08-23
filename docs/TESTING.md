@@ -273,3 +273,43 @@ This metric answers a different, narrower, well-posed question — spectral
 purity of a *clean, stationary* shift — and the crackle question stays
 exactly as documented in Findings #19/#20: real, understood, and not yet
 solved.
+
+## From measurement to fix — PSOLA's +12 semitone breakdown
+
+The table above wasn't just descriptive: tracing *why* PSOLA's artifact
+energy spikes specifically at +12 (not +3, not any downward shift)
+pointed straight at a fixable mechanism, not an inherent limitation.
+Grain width is fixed to the original period regardless of shift, but
+synthesis spacing shrinks as shift ratio grows — so grain overlap grows
+as `2 * grainWidthMultiplier * shiftRatio` (4x the unison baseline at
++12 semitones), producing comb-filtering from summing many time-shifted
+copies of the same grain content.
+
+`chooseGrainWidthMultiplierForShift()` (`PSOLAPitchShifter.h`/`.cpp`)
+solves that equation for the multiplier that holds overlap at the known-
+clean unison baseline: `1/shiftRatio`, clamped to the existing
+`grainWidthMultiplierMin` floor. Real before/after measurements
+(`tests/DSP/QualityMetricsTests.cpp`, `[grain-width-fix]`):
+
+| Shift | Before (1.0x) | After (formula) |
+|---|---|---|
+| +3 st | 1.20% | 1.29% (very slightly worse) |
+| +6 st | 1.91% | 1.85% (flat) |
+| +9 st | 3.58% | 2.11% (real improvement) |
+| +12 st | **99.18%** | **2.20%** (~45x) |
+
+Reported honestly rather than smoothed over: the fix is a large,
+decisive win exactly where the actual problem is (severe at +9,
+catastrophic at +12), and a wash-to-negligible-regression at small
+shifts where there was no real problem — narrowing the grain trades away
+a little within-grain frequency resolution, and at small shifts nothing
+offsets that cost. The data matches the mechanism's own prediction
+closely, including where it predicts *no* benefit.
+
+**Deliberately not wired into production** (`PSOLACorrector::process()`
+or the GUI) in this pass: `grainWidthMultiplier` is also a user-facing
+"Width" slider (`docs/ROADMAP.md` Phase 5), and silently auto-overriding
+it every block would change already-shipped behavior — the auto/manual
+interaction model that would need is a separate, deliberate decision, not
+assumed here. This exists as a tested, measured, callable function.
+`docs/FINDINGS.md` #26 has the full account.

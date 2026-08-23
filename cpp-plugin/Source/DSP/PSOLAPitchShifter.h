@@ -51,6 +51,43 @@ namespace pitchzazz
 constexpr float grainWidthMultiplierMin = 0.5f;
 constexpr float grainWidthMultiplierMax = 1.25f;
 
+/// A theory-derived (not guessed) choice of grain-width multiplier for a
+/// given shift, found from measuring artifact energy at real shift
+/// amounts with docs/TESTING.md's QualityMetrics tooling and tracing the
+/// mechanism it revealed: at a fixed multiplier, overlap between
+/// consecutive grains equals `2 * multiplier * shiftRatio`
+/// (grainWidth ~= 2*periodSamples*multiplier, synthesisSpacing =
+/// periodSamples/shiftRatio) — at the default multiplier=1.0 and
+/// shiftRatio=1 (unison, measured clean at 0.56% artifact energy), that's
+/// the value 2. Solving `2 = 2*multiplier*shiftRatio` for multiplier
+/// holds overlap at that same known-clean baseline for any upward shift:
+/// `multiplier = 1/shiftRatio`.
+///
+/// Only applied above unison (shiftRatio > 1): overlap only grows past
+/// the baseline in the upward direction (spacing shrinks while grain
+/// width stays fixed) — downward shifts *reduce* overlap on their own
+/// (spacing grows), and have no measured artifact-energy problem this
+/// formula is meant to address, so this function leaves the multiplier
+/// at its default there rather than acting on a mechanism the data
+/// doesn't support changing.
+///
+/// Clamped to `grainWidthMultiplierMin` — the floor of the existing
+/// shipped creative control, already covered by
+/// PSOLAPitchShifterTests.cpp's own energy-bounds test at that exact
+/// value, so this never asks the shifter to operate somewhere untested.
+///
+/// Deliberately a free function, not built into shiftPitch()/
+/// PSOLACorrector::process() itself: `grainWidthMultiplier` is also a
+/// user-facing GUI slider (docs/ROADMAP.md Phase 5's "Width" control),
+/// and silently overriding that manual setting on every block would be a
+/// real behavior change to an already-shipped control, not a pure
+/// quality fix — wiring an automatic/manual interaction model is a
+/// separate, deliberate decision for later, not assumed here. This
+/// function exists so the choice can be tested and measured in
+/// isolation (see QualityMetricsTests.cpp's before/after comparison)
+/// without pre-deciding that question.
+[[nodiscard]] float chooseGrainWidthMultiplierForShift (float semitoneShift) noexcept;
+
 /// Time-Domain Pitch-Synchronous Overlap-Add (TD-PSOLA) pitch shifter —
 /// the algorithm family real low-latency vocal-effects hardware/plugins
 /// use (see docs/PERFORMANCE_LOG.md's SOTA-comparison entry), as opposed
