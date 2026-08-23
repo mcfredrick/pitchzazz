@@ -1258,3 +1258,46 @@ PSOLA's `minHz` is ever raised to chase latency parity, that's a real
 trade against this project's own stated bass-vocal correctness
 requirement, on its own merits — not "matching a compromise the phase
 vocoder already made," because no such compromise was found.
+
+## 2026-08-23 — Correction: the -18st dropout is 66 recurring gaps, not one
+
+A direct question ("did you examine the output graphs — large jumps
+against the pure sine especially") caught two real mistakes, not one.
+
+**Mistake 1 — stale position.** The dropout-scan figure quoted in the
+diagnostic artifact (168 samples starting at sample 5122) was measured
+*before* the cross-fade fix was reverted, against `latencySamples=2654`.
+The waveform CSVs were correctly regenerated against the reverted
+implementation, but the dropout scan itself wasn't re-run — so the
+artifact's annotation pointed at the wrong sample (should be 3848, the
+exact 1274-sample shift matching the latency change 2654->1380).
+
+**Mistake 2 — wrong shape of the finding, not just the position.** The
+original dropout scan only ever reported the *longest single run*, never
+checked how many there were. A full scan of the same -18st render finds
+**66 separate zero-output gaps**, not one: each ~168 samples (3.81ms),
+recurring with near-perfect ~567-sample spacing (~77.6Hz) across the
+*entire* 40960-sample render — a genuine, regular periodic gating pattern,
+not an isolated event. Makes sense once stated: past the ~-12st onset
+threshold, synthesis spacing exceeds grain width on *every* mark, not
+occasionally, so the coverage gap recurs at the same rate the marks do,
+not once. Confirmed still absent at -3st and better (unchanged from the
+original scan) — still outside this plugin's actual +-1.5 semitone range,
+but a materially different (and more obviously audible — a periodic
+gate/buzz, not a rare click) defect than originally described.
+
+**Separately, checked whether the +-1st jittered-voice jumps line up with
+the predicted bucket-transition events** (the beat-rate theory from the
+prior session): they don't. The largest actual output jumps sit
+450-1700 samples from the nearest predicted reuse/skip event in both
+directions. The +1st cluster (samples ~1561-1569) lands right at the
+render's own startup transient (~180 samples past the 1380-sample latency
+boundary) — a one-time artifact of this synthetic test's cold start, not
+a recurring one. **The beat-rate theory is not confirmed by this check** —
+worth being precise that it remains a plausible, mathematically-grounded
+hypothesis, not a demonstrated mechanism, going into whatever the next
+investigation step is.
+
+Diagnostic artifact corrected: all 66 gaps now marked (was 1), with a
+"next gap" cycling control; explicit correction callout added rather than
+silently fixing the number.
