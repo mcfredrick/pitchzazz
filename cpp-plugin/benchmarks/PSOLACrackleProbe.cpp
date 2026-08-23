@@ -212,7 +212,12 @@ TEST_CASE ("PSOLA crackle probe: bucket-reuse/skip roughness vs normal-progressi
 {
     std::cout << std::fixed << std::setprecision (6);
     std::cout << "\nPhase-integrated jittered 220Hz tone (2% depth, 11.3Hz+17.7Hz), detectedHz=220 fixed per block:\n";
-    for (float shift : { -12.0f, -7.0f, -3.0f, 0.0f, 3.0f, 7.0f, 12.0f })
+    // -1/+1 (and the half-steps around them) added specifically: the user
+    // reports the artifact is almost always present at real playing
+    // shifts, which never exceed +-1 semitone (scale-correction's actual
+    // operating range, docs/FINDINGS.md #27) -- the wide +-3..12 sweep
+    // above never actually exercised that range at all.
+    for (float shift : { -12.0f, -7.0f, -3.0f, -1.5f, -1.0f, -0.5f, 0.0f, 0.5f, 1.0f, 1.5f, 3.0f, 7.0f, 12.0f })
         probeAt (shift);
     std::cout << std::endl;
 }

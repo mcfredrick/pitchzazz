@@ -1141,3 +1141,59 @@ evaluation, not merged to main or wired as the default — the cost is
 certain and measured; the benefit is only a DSP-reasoning argument, same
 epistemic position finding #19 originally shipped from before being
 reverted.
+
+## 2026-08-23 — Rescoped to the realistic +-1st range; underruns ruled out
+
+User feedback redirected this investigation: the artifact is reported
+almost always present at real playing shifts, which never exceed +-1.5
+semitones (`docs/FINDINGS.md` #27's enforced scale-correction bound) — the
+wide +-3..12 semitone sweep every prior probe used never actually
+exercised that range.
+
+**PSOLACrackleProbe re-run with +-0.5/1/1.5st added**: still ratios ≈1.0
+(0.925-1.007) at every added point — same per-mark local-roughness
+statistic, still no signal, now confirmed across the actual range too, not
+just the wide sweep.
+
+**Why that's expected, not just another failure**: at +1st, `shiftRatio =
+2^(1/12) = 1.0595`, so consecutive marks' bucket index advances by
+`1/1.0595 = 0.9438` on average — a reuse event roughly once every 17.8
+marks, not every mark. Computed exactly (`predictMarks`-style external
+replication): ~3371 samples between events at +1st (76ms, **13.1Hz**),
+~3568 samples at -1st (81ms, **12.4Hz**) — squarely in low-frequency-*beat*
+territory, not sparse discrete clicking. A per-*event* magnitude statistic
+(what PSOLACrackleProbe measures) was never going to see a *repetition
+rate* phenomenon — the right tool for that question is spectral (does the
+output show sidebands/envelope modulation near 12-13Hz), not another
+per-mark comparison. Not built yet; flagged as the concrete next step,
+same "wrong kind of metric" lesson as the earlier beat-vs-crackle
+diagnosis, now sharpened to a specific predicted frequency instead of a
+generic "look at sidebands."
+
+**Underrun/real-time-budget hypothesis — directly tested and ruled out.**
+A fair question: every probe in this investigation (including the one
+above) calls `shiftPitch()`/`process()` in a plain synchronous loop with
+unlimited wall-clock time — none of them could ever expose a genuine
+real-time underrun (worker thread falling behind, ring buffer silence-
+filling, docs/ARCHITECTURE.md's documented failure mode) even if that were
+the real cause. Checked directly: **`PSOLACorrector` never had a CPU-cost-
+vs-budget benchmark at all**, unlike the phase vocoder
+(`CorrectorPerformance.cpp`) and Varispeed (`VarispeedCorrectorPerformance.cpp`)
+engines, both of which did from early on. Added `PSOLACorrectorPerformance.cpp`,
+same pattern. Measured: **109us @ 44.1kHz against a 46,439us budget — 0.24%
+utilization** (102us/42,667us at 48kHz, 78us/21,333us at 96kHz), including
+this branch's correlation-search cross-fade cost. Not close to a deadline
+miss at any tested rate — underruns are not the explanation, confirmed by
+measurement, not assumption. This was a real, previously-unmeasured gap in
+this project's own performance-testing coverage (every other engine had
+this exact benchmark; PSOLA never did), independent of whatever the
+crackle root cause turns out to be.
+
+**Waveform visualization, rescoped**: `PSOLAWaveformDump.cpp` now renders
+jittered voice at +-1st (was +12st) with predicted event positions
+computed and marked directly on an interactive chart, for a direct visual
+second opinion the per-mark statistic can't give. Dropout-scan chart
+(pure sine, -18st) kept as a contrast case — confirms what a real,
+different bug's signature looks like on the same kind of chart, and that
+it doesn't occur in the tested realistic range (0 samples at -3st and
+above in the original dropout scan).
