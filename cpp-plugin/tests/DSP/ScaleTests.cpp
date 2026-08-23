@@ -1,5 +1,7 @@
 #include <DSP/Scale.h>
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
+#include <cstdlib>
 
 using namespace pitchzazz;
 
@@ -48,6 +50,46 @@ TEST_CASE ("Dorian mode snaps to a different note than Ionian at the same tonic"
     const auto scale = cDorian();
     CHECK (nearestInScaleMidi (64, scale) != 64); // E4: in C major, not in C Dorian (Eb, not E)
     CHECK (nearestInScaleMidi (63, scale) == 63); // Eb4: C Dorian's 3rd degree, unchanged
+}
+
+TEST_CASE ("no currently-implemented mode ever requires more than a 1-semitone correction", "[scale][grain-width-fix]")
+{
+    // The real invariant docs/FINDINGS.md #27 rests on: every mode this
+    // project implements is a rotation of the same major-scale step
+    // pattern (W W H W W W H, see Scale.cpp's intervalsFor()), which
+    // means the largest gap between two adjacent scale degrees is always
+    // 2 semitones -- so the worst a chromatic note can ever be from its
+    // nearest in-scale neighbor is exactly half that, 1 semitone. This
+    // is what bounds PSOLACorrector's real-world shift magnitude to
+    // ~1-1.5 semitones (scale correction plus ordinary intonation slop),
+    // never anywhere near the +6/+9/+12 range
+    // chooseGrainWidthMultiplierForShift() was built for.
+    //
+    // Exhaustive, not spot-checked: every tonic pitch class x every mode
+    // x every chromatic semitone in a two-octave span, so a future mode
+    // with a wider gap (if one were ever added) would fail this test
+    // rather than silently violating the assumption the PSOLA decision
+    // in docs/FINDINGS.md #27 depends on.
+    const ScaleMode modes[] = {
+        ScaleMode::major, ScaleMode::minor, ScaleMode::dorian, ScaleMode::phrygian,
+        ScaleMode::lydian, ScaleMode::mixolydian, ScaleMode::locrian
+    };
+
+    int maxCorrection = 0;
+    for (int tonic = 0; tonic < 12; ++tonic)
+    {
+        for (auto mode : modes)
+        {
+            const Scale scale { tonic, mode };
+            for (int midi = 48; midi < 72; ++midi) // two chromatic octaves, well clear of the range-edge cases the octave test above already covers
+            {
+                const int snapped = nearestInScaleMidi (midi, scale);
+                maxCorrection = std::max (maxCorrection, std::abs (snapped - midi));
+            }
+        }
+    }
+
+    CHECK (maxCorrection == 1);
 }
 
 TEST_CASE ("works across octaves, not just the scale's home octave", "[scale]")
