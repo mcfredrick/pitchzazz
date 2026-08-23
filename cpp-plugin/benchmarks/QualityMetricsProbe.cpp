@@ -117,7 +117,17 @@ TEST_CASE ("Quality-metrics probe: PSOLA before/after chooseGrainWidthMultiplier
     std::cout << std::fixed << std::setprecision (4);
     std::cout << "\nshift,grainWidthMultiplier,thdPlusNPercent,thdPlusNValid,artifactEnergyPercent\n";
 
-    for (float shift : { -12.0f, -3.0f, 0.0f, 3.0f, 6.0f, 9.0f, 12.0f })
+    // 0.5/1.0/1.5 semitones added specifically to check the actual
+    // operating range this plugin's scale-quantization ever requests:
+    // nearestInScaleMidi() over any of the 7 currently-implemented modes
+    // (all rotations of the same step pattern, max 2-semitone gap
+    // between scale degrees) mathematically cannot request more than 1
+    // semitone of scale-driven correction -- confirmed by exhaustive
+    // enumeration over all 12 tonics x 7 modes x 12 chromatic notes, not
+    // just typical-case reasoning. 1.5 covers that 1 semitone plus
+    // realistic intonation slop on top (the *continuous*, unrounded
+    // pitch can add up to another ~0.5 semitone in the same direction).
+    for (float shift : { -12.0f, -3.0f, -1.5f, -1.0f, -0.5f, 0.0f, 0.5f, 1.0f, 1.5f, 3.0f, 6.0f, 9.0f, 12.0f })
     {
         // Before: default multiplier (1.0), same as every number in the
         // table above.
