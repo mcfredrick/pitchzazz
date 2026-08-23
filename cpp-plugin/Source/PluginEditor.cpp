@@ -203,14 +203,50 @@ PitchzazzAudioProcessorEditor::PitchzazzAudioProcessorEditor (PitchzazzAudioProc
     addAndMakeVisible (shiftValueLabel);
     addAndMakeVisible (totalValueLabel);
 
-    // Height computed from resized()'s layout sum: 580px of stacked
-    // content (tonic/mode/engine rows, the three creative-control
-    // sliders, the pitch displays, the cents meter, bypass, the divider,
-    // and the four performance meters — latency now the same row shape
-    // as the three stage meters) plus the 16px top/bottom margins from
-    // getLocalBounds().reduced(16) — kept in sync with resized() by hand
-    // since JUCE has no layout-measurement API to derive this from.
-    setSize (320, 612);
+    // Green to match the CORRECTED box and the Shift meter — the scope's
+    // accent-coloured trace is the *output* of the shift stage, same
+    // colour convention as everywhere else this editor ties a colour to
+    // "post-correction" data. The dim grey trace (ScopeComponent's own
+    // fixed colour) is the input, not accent-coloured on purpose since
+    // it's a shared reference line, not a per-engine result.
+    addAndMakeVisible (scaleKeyboard);
+
+    scopeComponent.setAccentColour (juce::Colour (pitchzazz::colours::accentGreen));
+    addAndMakeVisible (scopeComponent);
+
+    spectrumComponent.setAccentColour (juce::Colour (pitchzazz::colours::accentGreen));
+    addAndMakeVisible (spectrumComponent);
+
+    freezeButton.setClickingTogglesState (false); // driven by isFrozen, not the button's own state -- see toggleFreeze()
+    freezeButton.onClick = [this] { toggleFreeze(); };
+    addAndMakeVisible (freezeButton);
+
+    recordButton.setClickingTogglesState (false); // driven by isRecording(), not the button's own state -- see toggleRecording()
+    recordButton.onClick = [this] { toggleRecording(); };
+    addAndMakeVisible (recordButton);
+
+    revealRecordingButton.setEnabled (false); // nothing to reveal until a recording session exists -- see toggleRecording()
+    revealRecordingButton.onClick = [this] { currentRecordingSessionDir.revealToUser(); };
+    addAndMakeVisible (revealRecordingButton);
+
+    recordStatusLabel.setFont (juce::Font (10.0f));
+    recordStatusLabel.setColour (juce::Label::textColourId, juce::Colour (pitchzazz::colours::textSecondary));
+    recordStatusLabel.setJustificationType (juce::Justification::centredLeft);
+    addAndMakeVisible (recordStatusLabel);
+
+    // Width grew from the original 320 to fit a second column (16px gap +
+    // a 280px-wide right column) alongside the original controls column,
+    // rather than stacking everything below and growing height instead —
+    // a wide scope/spectrum reads a waveform's/spectrum's shape far better
+    // than a tall narrow one would. Height grew from the original 612
+    // (which exactly fit just the left column's control stack) to fit the
+    // right column's own now-taller content — two stacked
+    // scope/spectrum panels plus their control rows — since that column is
+    // laid out top-to-bottom independently and would otherwise be
+    // squeezed into whatever height the left column happened to need; the
+    // left column simply has empty space below it in the taller window,
+    // the same trade-off any two-column layout with uneven content makes.
+    setSize (320 + 16 + 280, 612 + 180 + 100); // +100: the scale keyboard panel (92px) + its gap (8px), added below
 
     updateRetuneControlsEnablement();
     updateGrainWidthControlEnablement();
@@ -232,6 +268,19 @@ void PitchzazzAudioProcessorEditor::timerCallback()
 {
     updateRetuneControlsEnablement();
     updateGrainWidthControlEnablement();
+
+    // Polled here rather than pushed from the worker: isRecording() is
+    // already eventually-consistent (CorrectorWorker.h's doc), and the
+    // elapsed-time text only needs to be right to within this timer's own
+    // 10Hz granularity, so there's no reason for a separate notification
+    // path just for this label.
+    if (processorRef.isRecording())
+    {
+        const auto elapsedSec = (juce::Time::currentTimeMillis() - recordingStartMs) / 1000;
+        recordStatusLabel.setText (juce::String::formatted ("recording %02lld:%02lld",
+                                                              (long long) (elapsedSec / 60), (long long) (elapsedSec % 60)),
+                                    juce::dontSendNotification);
+    }
 
     // EMA smoothing — see the class doc for why this over a windowed
     // average. Applied before anything derived from these values (labels
@@ -335,6 +384,70 @@ void PitchzazzAudioProcessorEditor::updateGrainWidthControlEnablement()
     grainWidthSlider.setEnabled (processorRef.activeEngineSupportsGrainWidthControl());
 }
 
+void PitchzazzAudioProcessorEditor::toggleRecording()
+{
+    // Driven by processorRef.isRecording() rather than the button's own
+    // toggle state (recordButton.setClickingTogglesState(false) in the
+    // constructor) -- the two halves (audio, frames) are started/stopped
+    // via async handoffs (CorrectorWorker's pending-atomic pickup,
+    // ScopeFrameRecorder's own thread), so treating the *worker's* actual
+    // state as ground truth avoids the button ever showing "recording"
+    // when a request hasn't actually landed yet.
+    if (! processorRef.isRecording())
+    {
+        const auto sessionName = juce::Time::getCurrentTime().formatted ("%Y-%m-%d_%H-%M-%S");
+        currentRecordingSessionDir = PitchzazzAudioProcessor::getRecordingsPath().getChildFile (sessionName);
+
+        if (! currentRecordingSessionDir.createDirectory().wasOk())
+        {
+            recordStatusLabel.setText ("couldn't create recording folder", juce::dontSendNotification);
+            return;
+        }
+
+        processorRef.requestStartRecording (currentRecordingSessionDir);
+        scopeComponent.startRecordingFrames (currentRecordingSessionDir);
+        recordingStartMs = juce::Time::currentTimeMillis();
+
+        recordButton.setButtonText ("Stop");
+        recordButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xffcc3333));
+        recordStatusLabel.setText ("recording...", juce::dontSendNotification);
+    }
+    else
+    {
+        processorRef.requestStopRecording();
+        scopeComponent.stopRecordingFrames();
+
+        recordButton.setButtonText ("Record");
+        recordButton.removeColour (juce::TextButton::buttonColourId);
+        recordStatusLabel.setText ("saved: " + currentRecordingSessionDir.getFileName(), juce::dontSendNotification);
+        revealRecordingButton.setEnabled (true);
+    }
+}
+
+void PitchzazzAudioProcessorEditor::toggleFreeze()
+{
+    isFrozen = ! isFrozen;
+    scopeComponent.setFrozen (isFrozen);
+    spectrumComponent.setFrozen (isFrozen);
+    freezeButton.setButtonText (isFrozen ? "Live" : "Freeze");
+    if (isFrozen)
+        freezeButton.setColour (juce::TextButton::buttonColourId, juce::Colour (pitchzazz::colours::accentCyan).withAlpha (0.35f));
+    else
+        freezeButton.removeColour (juce::TextButton::buttonColourId); // same "revert to LookAndFeel default" pattern as toggleRecording()
+}
+
+juce::String PitchzazzAudioProcessorEditor::currentScaleName() const
+{
+    const auto scale = processorRef.getScale();
+    const juce::String tonicName = pitchClassNames[scale.tonicPitchClass];
+
+    for (const auto& entry : modeEntries)
+        if (entry.mode == scale.mode)
+            return tonicName + " " + entry.displayName;
+
+    return tonicName;
+}
+
 void PitchzazzAudioProcessorEditor::updateProcessorScale()
 {
     const int tonicPitchClass = tonicBox.getSelectedId() - 1;
@@ -368,6 +481,51 @@ void PitchzazzAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced (16);
     area.removeFromTop (44); // title
+
+    // Right-hand column, split off before any of the existing vertical
+    // layout below runs — everything from here down operates on the
+    // narrower `area` left behind, unchanged from the original
+    // single-column layout. This column spans the full remaining height
+    // (title down to the bottom margin) rather than matching just one
+    // section of the left column, since it isn't tied to any single row
+    // over there.
+    auto scopeArea = area.removeFromRight (280);
+    area.removeFromRight (16); // gap between the two columns
+
+    // Record button + status row, then freeze + reveal-in-Finder row,
+    // above the two panels below -- these controls are conceptually part
+    // of the scope/spectrum (they capture/pause exactly what those show),
+    // so they live in this column rather than competing for space in the
+    // left column's already-full control stack.
+    auto recordRow = scopeArea.removeFromTop (24);
+    recordButton.setBounds (recordRow.removeFromLeft (70));
+    recordRow.removeFromLeft (8);
+    recordStatusLabel.setBounds (recordRow);
+    scopeArea.removeFromTop (8);
+
+    auto toolsRow = scopeArea.removeFromTop (24);
+    freezeButton.setBounds (toolsRow.removeFromLeft (70));
+    toolsRow.removeFromLeft (8);
+    revealRecordingButton.setBounds (toolsRow.removeFromLeft (70));
+    scopeArea.removeFromTop (8);
+
+    // Scale keyboard above the scope/spectrum pair -- "what scale is
+    // active and where the detected pitch sits relative to it" is more
+    // fundamental context than either panel below, so it reads first.
+    scaleKeyboard.setBounds (scopeArea.removeFromTop (92));
+    scopeArea.removeFromTop (8);
+
+    // Time-domain scope on top, frequency-domain spectrum below it --
+    // split evenly, each panel internally stacking its own BEFORE/AFTER
+    // rows the same way (see ScopeComponent/SpectrumComponent's own
+    // paint()). Reading top-to-bottom this way keeps the pair in the same
+    // "what a signal looks like, then what it's made of" order most
+    // audio-analysis tools use.
+    constexpr int panelGap = 8;
+    const int panelHeight = (scopeArea.getHeight() - panelGap) / 2;
+    scopeComponent.setBounds (scopeArea.removeFromTop (panelHeight));
+    scopeArea.removeFromTop (panelGap);
+    spectrumComponent.setBounds (scopeArea);
 
     auto tonicRow = area.removeFromTop (28);
     tonicLabel.setBounds (tonicRow.removeFromLeft (60));

@@ -405,6 +405,9 @@ target_sources(${PROJECT_NAME} PRIVATE
     Source/DSP/VarispeedCorrector.h
     Source/DSP/CorrectorWorker.cpp
     Source/DSP/CorrectorWorker.h
+    Source/DSP/ScopeCapture.h
+    Source/DSP/AudioSessionRecorder.h
+    Source/DSP/ScopeFrameRecorder.h
     Source/DSP/PitchEngine.h
     Source/DSP/NativeCorrectorEngine.cpp
     Source/DSP/NativeCorrectorEngine.h

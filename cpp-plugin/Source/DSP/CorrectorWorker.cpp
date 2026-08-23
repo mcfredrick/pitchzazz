@@ -38,6 +38,7 @@ CorrectorWorker::~CorrectorWorker()
     // have already called stopThread(), see PluginProcessor's
     // stopWorker()), so it's safe to just reclaim it here directly.
     delete pendingEngine.exchange (nullptr, std::memory_order_acquire);
+    delete pendingRecordingStart.exchange (nullptr, std::memory_order_acquire);
 }
 
 void CorrectorWorker::setScale (Scale newScale) noexcept
@@ -146,6 +147,18 @@ void CorrectorWorker::run()
                 crossfadeEngine.reset (newEngine);
         }
 
+        // Same "pick up between blocks" timing as the engine swap above --
+        // start is applied before stop so a start-then-immediate-stop
+        // request pair (unlikely from a UI button, but not impossible)
+        // still leaves the recorder stopped rather than racing on order.
+        if (auto* sessionDir = pendingRecordingStart.exchange (nullptr, std::memory_order_acquire))
+        {
+            audioRecorder.start (*sessionDir, sampleRate);
+            delete sessionDir;
+        }
+        if (pendingRecordingStop.exchange (false, std::memory_order_acquire))
+            audioRecorder.stop();
+
         int startIndex1, blockSize1, startIndex2, blockSize2;
         inputFifo.prepareToRead (blockSize - filled, startIndex1, blockSize1, startIndex2, blockSize2);
 
@@ -236,6 +249,8 @@ void CorrectorWorker::run()
             lastDetectedHz.store (blended.detectedHz, std::memory_order_relaxed);
             lastSemitoneShift.store (blended.semitoneShift, std::memory_order_relaxed);
 
+            scopeCapture.write (analysisBuffer.data(), blendedOutput.data(), blockSize);
+            audioRecorder.writeBlock (analysisBuffer.data(), blendedOutput.data(), blockSize);
             pushToOutputFifo (blendedOutput, outputFifo, outputBuffer);
 
             ++crossfadeBlockIndex;
@@ -257,6 +272,8 @@ void CorrectorWorker::run()
             lastShiftUs.store (result.timings.shiftUs, std::memory_order_relaxed);
             lastDetectedHz.store (result.detectedHz, std::memory_order_relaxed);
             lastSemitoneShift.store (result.semitoneShift, std::memory_order_relaxed);
+            scopeCapture.write (analysisBuffer.data(), engineOutput.data(), blockSize);
+            audioRecorder.writeBlock (analysisBuffer.data(), engineOutput.data(), blockSize);
             pushToOutputFifo (engineOutput, outputFifo, outputBuffer);
         }
 

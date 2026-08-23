@@ -1,7 +1,9 @@
 #pragma once
 
+#include "AudioSessionRecorder.h"
 #include "PitchEngine.h"
 #include "RetuneSmoothing.h"
+#include "ScopeCapture.h"
 #include <juce_core/juce_core.h>
 #include <atomic>
 #include <memory>
@@ -133,6 +135,31 @@ public:
     float getLastDetectedHz() const noexcept;
     float getLastSemitoneShift() const noexcept;
 
+    /// The GUI scope's data source (docs/ROADMAP.md's "one-period
+    /// waveform visualization" item) -- lock-free, see ScopeCapture.h's
+    /// own doc for why a seqlock rather than a mutex even on this
+    /// no-deadline thread.
+    [[nodiscard]] const ScopeCapture& getScopeCapture() const noexcept { return scopeCapture; }
+
+    /// Starts/stops writing the raw audio half of a scope recording
+    /// (docs/ROADMAP.md's scope-recording item) to `sessionDir`, which
+    /// must already exist. Safe to call from the message thread: same
+    /// "hand off a pointer, applied on the worker's next iteration, never
+    /// mid-process()" pattern requestEngineSwap() already uses, not
+    /// applied synchronously -- see run()'s pickup of pendingRecordingStart
+    /// for why that matters here too (AudioSessionRecorder::start/stop
+    /// aren't safe to call concurrently with writeBlock()).
+    void requestStartRecording (const juce::File& sessionDir)
+    {
+        auto* old = pendingRecordingStart.exchange (new juce::File (sessionDir), std::memory_order_release);
+        delete old; // a second start request superseding an unconsumed one -- same drop-and-replace rule as requestEngineSwap
+    }
+    void requestStopRecording() noexcept { pendingRecordingStop.store (true, std::memory_order_release); }
+
+    /// Eventually-consistent, same caveat as getActiveEngineName() above --
+    /// may briefly lag an in-flight start/stop request.
+    bool isRecording() const noexcept { return audioRecorder.isRecording(); }
+
 private:
     // 4 blocks (~185ms at 44.1kHz/2048) rather than 1 — a single-block
     // linear blend measurably reduced the swap-boundary discontinuity
@@ -200,6 +227,15 @@ private:
     std::atomic<double> lastShiftUs { 0.0 };
     std::atomic<float> lastDetectedHz { 0.0f };
     std::atomic<float> lastSemitoneShift { 0.0f };
+
+    ScopeCapture scopeCapture;
+
+    // Same ownership-handoff shape as pendingEngine above (a raw pointer
+    // the message thread releases into and only the worker thread ever
+    // reclaims) -- see requestStartRecording()'s doc.
+    std::atomic<juce::File*> pendingRecordingStart { nullptr };
+    std::atomic<bool> pendingRecordingStop { false };
+    AudioSessionRecorder audioRecorder;
 };
 
 } // namespace pitchzazz
