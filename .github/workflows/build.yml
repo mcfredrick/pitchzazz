@@ -69,6 +69,7 @@ jobs:
     defaults:
       run:
         working-directory: cpp-plugin
+        shell: bash
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       mode: ${{ steps.set-mode.outputs.mode }}
@@ -175,9 +176,18 @@ jobs:
     # (.env, CMakeLists.txt, scripts/) lives under cpp-plugin/. BUILD_DIR
     # is absolute (see its definition) specifically so it doesn't also
     # need adjusting here.
+    #
+    # shell: bash restated explicitly, not just inherited from the
+    # workflow-level defaults above: empirically, a job-level defaults.run
+    # block that sets working-directory without also restating shell
+    # doesn't reliably keep the workflow-level shell default on Windows —
+    # confirmed by a real failing run where "Load .env" (bash syntax, `[
+    # ! -f ... ]`) executed under PowerShell instead
+    # ("ParserError: ... Missing type name after '['"), not guessed.
     defaults:
       run:
         working-directory: cpp-plugin
+        shell: bash
 
     steps:
       # Must be first: several later steps below (Install JUCE Linux
