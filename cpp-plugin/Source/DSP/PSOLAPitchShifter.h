@@ -51,15 +51,6 @@ namespace pitchzazz
 constexpr float grainWidthMultiplierMin = 0.5f;
 constexpr float grainWidthMultiplierMax = 1.25f;
 
-// Namespace-scope (not a PSOLAPitchShifter private member) for the same
-// reason grainWidthMultiplierMax is: getLatencySamples()'s worst-case
-// formula depends on it, and tests assert that formula explicitly rather
-// than just "some small number" (PSOLAPitchShifterTests.cpp) — they need
-// the authoritative constant, not a hardcoded duplicate of it. See
-// PSOLAPitchShifter.h's own doc on searchAlignmentOffset() for what this
-// bounds.
-constexpr int psolaAlignSearchRadius = 32;
-
 /// A theory-derived (not guessed) choice of grain-width multiplier for a
 /// given shift, found from measuring artifact energy at real shift
 /// amounts with docs/TESTING.md's QualityMetrics tooling and tracing the
@@ -132,18 +123,16 @@ constexpr int psolaAlignSearchRadius = 32;
 ///
 /// Known, accepted limitation, not silently swept aside: reading source
 /// content from a single nearest analysis position (rather than the true
-/// continuous signal) caused an audible crackle/low-frequency-beat artifact
-/// on real (non-stationary) audio — see placeGrainAt()'s doc for the
-/// mechanism, and docs/FINDINGS.md #19/#20 for the full story, including a
-/// first cross-fade attempt that blended the two nearest buckets *without*
-/// aligning them first, shipped, then found by ear to not actually fix it.
-/// `feature/psola-crackle-latency` (docs/PERFORMANCE_LOG.md's 2026-08-23
-/// entry) revisits this with correlation-based alignment before blending —
-/// the fix #20 itself identifies as the real one — at a real, disclosed
-/// latency cost (see getLatencySamples()'s doc); not yet re-confirmed by
-/// ear, only by DSP reasoning and the existing automated test suite, since
-/// no automated metric tried so far (four attempts now) discriminates this
-/// artifact.
+/// continuous signal) causes an audible crackle/low-frequency-beat
+/// artifact on real (non-stationary) audio — see placeGrainAt()'s doc for
+/// the mechanism, and docs/FINDINGS.md #19/#20 for the full story,
+/// including a cross-fade attempt that was tried, tested, shipped, then
+/// found by ear to not actually fix it (and cost real latency doing it) —
+/// reverted rather than kept for a benefit that didn't materialize. Fixing
+/// this properly needs correlation-based grain alignment before blending,
+/// not just blending — a bigger change than this project's timeline
+/// currently has room for; documented here so the gap is explicit rather
+/// than discovered by surprise.
 ///
 /// Not real-time-safe to construct (allocates its buffers once); shiftPitch()
 /// itself doesn't allocate — same shape as PitchShifter.
@@ -174,39 +163,25 @@ public:
         grainWidthMultiplier = std::clamp (multiplier, grainWidthMultiplierMin, grainWidthMultiplierMax);
     }
 
-    /// A **fixed** delay-line tap — sized from the worst case across every
-    /// axis that affects it, not one that adapts to the currently detected
-    /// pitch, the currently set grain-width multiplier, or how much a
-    /// given mark's cross-fade weight toward bucket B happens to be — a
-    /// host needs one constant number, not one that varies block to block.
-    ///
-    /// CHANGED (2026-08-23, `feature/psola-crackle-latency`): placeGrainAt()
-    /// now blends *two* analysis buckets (the correlation-aligned crackle
-    /// fix, see that method's doc), which needs the farther bucket's
-    /// content available too — one more period of reach, plus the
-    /// alignment search radius, on top of the original single-bucket
-    /// derivation. `maxForwardReachSamples` is the worst-case distance
-    /// past a mark's own write position that its required read content can
-    /// now extend: `maxPeriodSamples + 2*maxHalfWidthSamples +
-    /// psolaAlignSearchRadius` (bucket A's own half-width reach, bucket B's
-    /// half-width reach, the extra period to reach bucket B's *start*, and
-    /// the alignment search margin).
-    ///
-    /// `latencySamples = maxForwardReachSamples + maxHalfWidthSamples` —
-    /// **not** `2 * maxForwardReachSamples` (an earlier version of this
-    /// derivation used that, and it was a real over-margin, not just extra
-    /// caution: see the constructor's comment for the exact proof). The
-    /// original single-bucket formula (`2 * maxHalfWidthSamples`) is the
-    /// same tight bound in disguise — it's what this formula degenerates
-    /// to when `maxForwardReachSamples == maxHalfWidthSamples`, true
-    /// before this change since a single-bucket mark's forward reach *is*
-    /// just its own half-width. This is still a real, substantial latency
-    /// increase versus the single-bucket baseline even at the tight bound
-    /// (see docs/PERFORMANCE_LOG.md's 2026-08-23 entry for the measured
-    /// before/after numbers) — a disclosed trade-off for the crackle fix,
-    /// not a free win, and the reason this lives in its own branch pending
-    /// a decision on whether the quality gain (itself unverified by any
-    /// automated metric so far — same entry) is worth it.
+    /// A **fixed** delay-line tap — 2x the worst-case grain half-width,
+    /// i.e. 2 * ceil(sampleRate/minHz * grainWidthMultiplierMax) — not one
+    /// that adapts to the currently detected pitch *or* the currently set
+    /// grain-width multiplier: sized from the worst case of both so it's
+    /// always safely long enough, then used unconditionally regardless of
+    /// what's actually playing or set. This means a higher detected pitch
+    /// or a narrower grain does *not* get a shorter real latency: the
+    /// underlying per-grain lookahead math is pitch- and grain-width-
+    /// dependent, but the reported/actual output delay isn't, since a
+    /// single fixed number is what JUCE's setLatencySamples() needs and a
+    /// host can't be told "it varies." grainWidthMultiplierMax was chosen
+    /// specifically to keep this worst case below the phase vocoder's
+    /// fixed ~46-50ms window (docs/PERFORMANCE_LOG.md) — see that
+    /// constant's own doc for the numbers and why 1.5x, not something
+    /// wider, was the right call. Pre-existing (grain-width-control) exact
+    /// confirmation via benchmarks/PSOLALatencyProbe.cpp's onset probe
+    /// predates this control and needs re-running against the new
+    /// worst-case formula — flagged, not yet done (see docs/ROADMAP.md's
+    /// dated entry for this feature).
     [[nodiscard]] int getLatencySamples() const noexcept { return latencySamples; }
 
 private:
@@ -240,11 +215,6 @@ private:
     // maxPeriodSamples directly, so raising the multiplier can never
     // exceed what was actually allocated for.
     int maxHalfWidthSamples = 0;
-
-    // See getLatencySamples()'s doc: the worst-case distance past a mark's
-    // own write position its required read content can now extend, once
-    // placeGrainAt() reaches into a second (bucket B) analysis bucket.
-    int maxForwardReachSamples = 0;
 
     // Grain half-width multiplier — see setGrainWidthMultiplier()'s doc.
     // 1.0 reproduces this class's original fixed-at-one-period behaviour
@@ -286,26 +256,6 @@ private:
     std::vector<float> grainWindow;
 
     int latencySamples = 0;
-
-    // Fixed, not period-scaling -- same "fixed constant, not proportional"
-    // idiom WSOLATimeStretcher's maxCorrelationLengthSamples already
-    // established in this codebase (for the same reason: bounds the
-    // per-grain search cost regardless of how wide a low-pitch grain
-    // gets). psolaAlignSearchRadius (namespace scope, see its own doc)
-    // covers realistic cycle-to-cycle jitter (a few percent of even a low
-    // 80Hz/551-sample period) with margin.
-    static constexpr int maxAlignCorrelationLength = 64;
-
-    // Small-window NCC search for the offset that best aligns bucket B's
-    // content to bucket A's, before they're cross-faded together in
-    // placeGrainAt() -- see that method's doc for why alignment has to
-    // happen first (docs/FINDINGS.md #20). Same hard-minimum-improvement
-    // pattern as WSOLATimeStretcher::searchBestOffset, for the identical
-    // reason: a pure best-correlation search has a degenerate trivial
-    // solution (offset 0 already correlates well against itself-ish
-    // content on any near-periodic material), so nominal has to be beaten
-    // substantially, not just edged out, before being allowed to move.
-    [[nodiscard]] int searchAlignmentOffset (long long refCenter, long long candCenter, int halfWidth) const noexcept;
 
     void updatePeriodEstimate (float detectedHz) noexcept;
     void placeGrainAt (double markPos);

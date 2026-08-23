@@ -144,28 +144,22 @@ TEST_CASE ("reported latency is pitch-independent and matches the worst-case for
 
     PSOLAPitchShifter shifter (sampleRate);
 
-    // Matches the derivation in PSOLAPitchShifter.h/.cpp exactly. Asserting
-    // the formula, not just "some small number," so a future change to
-    // minHz/grainWidthMultiplierMax/psolaAlignSearchRadius/the derivation
-    // itself has to consciously update this test rather than silently
-    // pass. This is a *fixed* worst-case number, not an adaptive one — it
-    // does not get smaller for higher detected pitches (or a narrower
-    // grain-width setting) at runtime (see getLatencySamples()'s doc for
-    // why: a host needs one constant value, not one that varies block to
-    // block).
-    //
-    // CHANGED (2026-08-23, feature/psola-crackle-latency): was
-    // `2 * maxHalfWidthSamples`. placeGrainAt() now blends a second
-    // ("bucket B") analysis bucket for the correlation-aligned crackle
-    // fix, which needs one more period of reach plus the alignment search
-    // margin — see getLatencySamples()'s doc for the full derivation and
-    // docs/PERFORMANCE_LOG.md's 2026-08-23 entry for the measured
-    // before/after latency numbers this costs.
+    // Matches the derivation in PSOLAPitchShifter.h/.cpp exactly: 2 *
+    // ceil(sampleRate / minHz * grainWidthMultiplierMax) — the worst-case
+    // half-width across *both* the lowest detectable pitch and the widest
+    // the grain-width control (docs/ROADMAP.md Phase 5) can ever be set
+    // to, not just the pitch floor alone. Asserting the formula, not just
+    // "some small number," so a future change to minHz/grainWidthMultiplierMax/
+    // the derivation itself has to consciously update this test rather
+    // than silently pass. This is a *fixed* worst-case number, not an
+    // adaptive one — it does not get smaller for higher detected pitches
+    // (or a narrower grain-width setting) at runtime (see
+    // getLatencySamples()'s doc for why: a host needs one constant value,
+    // not one that varies block to block).
     constexpr float minHz = 80.0f;
     const int maxPeriodSamples = (int) std::ceil (sampleRate / minHz);
     const int maxHalfWidthSamples = (int) std::ceil ((double) maxPeriodSamples * (double) grainWidthMultiplierMax);
-    const int maxForwardReachSamples = maxPeriodSamples + 2 * maxHalfWidthSamples + psolaAlignSearchRadius;
-    const int expectedLatency = maxForwardReachSamples + maxHalfWidthSamples;
+    const int expectedLatency = 2 * maxHalfWidthSamples;
     CHECK (shifter.getLatencySamples() == expectedLatency);
 
     // Deliberately NOT also asserting this stays below the phase
