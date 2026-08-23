@@ -123,6 +123,64 @@ TEST_CASE ("PSOLA dropout scan: exact-zero runs in a sustained pure-sine output,
     std::cout << std::endl;
 }
 
+TEST_CASE ("PSOLA mid-stream shift change: does changing semitoneShift cause a discontinuity?", "[psola][shift-change]")
+{
+    // Every other render in this file uses a *constant* shift from sample
+    // zero -- none test what real use actually looks like: one long-lived
+    // shifter object, semitoneShift changing block to block as the
+    // detected/quantized target moves, buffers already warm. This
+    // directly checks whether the shift value itself changing mid-stream
+    // (not a cold construction) produces a discontinuity, and if so, how
+    // it compares to the cold-start transient found elsewhere.
+    PSOLAPitchShifter shifter (sampleRate);
+    const auto input = jitteredVoice (blockSize * 20);
+    std::vector<float> output (input.size(), 0.0f);
+
+    const int totalBlocks = (int) (input.size() / (size_t) blockSize);
+    const int changeAtBlock = totalBlocks / 2; // shift changes exactly at this block boundary
+    for (int block = 0; block < totalBlocks; ++block)
+    {
+        const float shift = (block < changeAtBlock) ? 0.0f : 1.0f;
+        std::vector<float> in (input.begin() + block * blockSize, input.begin() + (block + 1) * blockSize);
+        std::vector<float> out (blockSize, 0.0f);
+        shifter.shiftPitch (baseFreq, shift, in, out);
+        std::copy (out.begin(), out.end(), output.begin() + block * blockSize);
+    }
+
+    const int changeAtSample = changeAtBlock * blockSize;
+    std::cout << "\nMid-stream shift change (0st -> +1st at input sample " << changeAtSample << "):\n";
+
+    // Scan the whole render for outlier jumps, same 0.045 threshold used
+    // for the fixed-shift renders, and report proximity to the actual
+    // change point specifically.
+    constexpr float threshold = 0.045f;
+    int nearChangeCount = 0, farFromChangeCount = 0;
+    float maxJump = 0.0f; int maxJumpPos = -1;
+    for (size_t i = 1; i < output.size(); ++i)
+    {
+        const float d = std::abs (output[i] - output[(size_t) (i - 1)]);
+        if (d > maxJump) { maxJump = d; maxJumpPos = (int) i; }
+        if (d > threshold)
+        {
+            const int distFromChange = std::abs ((int) i - changeAtSample);
+            if (distFromChange < 100)
+                ++nearChangeCount;
+            else
+                ++farFromChangeCount;
+        }
+    }
+    std::cout << "  jumps >" << threshold << " within 100 samples of the change point: " << nearChangeCount << "\n";
+    std::cout << "  jumps >" << threshold << " elsewhere in the render: " << farFromChangeCount << "\n";
+    std::cout << "  single largest jump: " << maxJump << " at sample " << maxJumpPos
+               << " (" << (maxJumpPos - changeAtSample) << " samples from the change point)\n";
+
+    std::ofstream f ("/tmp/psola_midstream_shift_change.csv");
+    f << "sample,input,output\n";
+    for (size_t i = 0; i < input.size(); ++i)
+        f << i << "," << input[i] << "," << output[i] << "\n";
+    std::cout << "  Wrote /tmp/psola_midstream_shift_change.csv (" << input.size() << " rows)" << std::endl;
+}
+
 TEST_CASE ("PSOLA waveform dump: input/output CSV for direct visual inspection", "[psola][waveform-dump]")
 {
     // Pure sine at -18st: past the ~-12st gap-onset boundary the earlier
@@ -160,6 +218,26 @@ TEST_CASE ("PSOLA waveform dump: input/output CSV for direct visual inspection",
         const auto output = render (input, shift);
 
         const std::string filename = "/tmp/psola_jittered_voice_" + std::string (shift > 0 ? "+" : "")
+                                    + std::to_string ((int) shift) + "st.csv";
+        std::ofstream f (filename);
+        f << "sample,input,output\n";
+        for (size_t i = 0; i < input.size(); ++i)
+            f << i << "," << input[i] << "," << output[i] << "\n";
+        std::cout << "Wrote " << filename << " (" << input.size() << " rows)\n";
+    }
+
+    // Pure sine at +-1st: the control case. Adjacent analysis buckets of a
+    // stationary sine are bit-identical, so a bucket-reuse/skip transition
+    // replays literally the same content -- should be seamless *by
+    // construction*, no jitter-mismatch mechanism possible. If this isn't
+    // clean, something beyond the jitter-mismatch theory is going on, at
+    // the same realistic shift amount the jittered-voice renders use.
+    for (float shift : { -1.0f, 1.0f })
+    {
+        const auto input = pureSine (blockSize * 20);
+        const auto output = render (input, shift);
+
+        const std::string filename = "/tmp/psola_pure_sine_" + std::string (shift > 0 ? "+" : "")
                                     + std::to_string ((int) shift) + "st.csv";
         std::ofstream f (filename);
         f << "sample,input,output\n";

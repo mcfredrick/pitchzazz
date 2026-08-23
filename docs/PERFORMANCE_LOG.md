@@ -1301,3 +1301,53 @@ investigation step is.
 Diagnostic artifact corrected: all 66 gaps now marked (was 1), with a
 "next gap" cycling control; explicit correction callout added rather than
 silently fixing the number.
+
+## 2026-08-23 — Pure-sine control renders, explicit jump markers, mid-stream shift-change test
+
+Three more direct checks, prompted by continued scrutiny of the actual
+charts rather than the summary text describing them.
+
+**Pure sine at +-1st, as a control against the jittered-voice renders.**
+A stationary sine's adjacent analysis buckets are bit-identical, so a
+bucket-reuse/skip transition there replays literally the same content and
+should be seamless *by construction* — a clean test of whether anything
+beyond jitter-mismatch is going on. Result: no clipping, no dropouts,
+same clean picture as the jittered case. The one place they're *not*
+identical is informative: both +1st renders (jittered and pure sine) show
+a matching cluster of jumps at samples ~1563-1569, nearly the same
+magnitude in each (0.088 jittered vs. 0.098 pure sine) — confirming that
+cluster is a render-startup artifact (right after the 1380-sample latency
+fill-up boundary), unrelated to jitter or content, not a signal.
+
+**Explicit outlier threshold, not just "top N jumps."** Sorting by jump
+size alone conflates genuine outliers with the top of an otherwise-normal
+distribution. Used 0.045 — meaningfully above a ~220Hz tone's natural
+max slope (~0.031-0.033/sample) — as an actual criterion. Result across
+all four +-1st renders (jittered and pure sine, both directions): **only
+the startup-transient cluster clears the threshold, nowhere else.** Zero
+outlier jumps anywhere else in four 40960-sample renders, at either shift
+direction, with or without jitter.
+
+**Mid-stream shift change: does the startup transient recur every time
+the shift amount changes in real use?** A fair, important question — real
+use never cold-starts the shifter (it's constructed once, lives for the
+plugin's lifetime; `semitoneShift` is just a parameter passed fresh into
+`shiftPitch()` every block, buffers already warm). Built a direct test
+rather than answer from that reasoning alone: one continuous shifter,
+jittered voice, shift held at 0st for 10 blocks then changed to +1st for
+10 more, same 0.045 threshold applied across the whole render. **Zero
+jumps above threshold anywhere, including within 100 samples of the
+change point itself.** Caught a real bug in the test while building it —
+`jitteredVoice()` was called with seconds instead of samples (copy-paste
+from a differently-typed sibling function), silently producing a
+zero-length input and a false "no data" result on the first run; fixed
+before trusting the (correct) second result.
+
+**Net: four independent hypotheses now checked and ruled out for the
+realistic +-1st range** — clipping, dropouts, bucket-transition-correlated
+jumps, and shift-change transients. None of them explain "almost always
+present." Whatever the mechanism is, it is not a raw waveform-amplitude
+discontinuity visible to any check built so far. `PSOLAWaveformDump.cpp`'s
+new shift-change test case is a permanent addition (`[shift-change]` tag),
+not a one-off script — the question "does X recur during normal use, not
+just at cold start" is worth being able to re-ask cheaply later.
