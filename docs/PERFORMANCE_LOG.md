@@ -1197,3 +1197,64 @@ second opinion the per-mark statistic can't give. Dropout-scan chart
 different bug's signature looks like on the same kind of chart, and that
 it doesn't occur in the tested realistic range (0 samples at -3st and
 above in the original dropout scan).
+
+## 2026-08-23 — Cross-fade reverted; does the phase vocoder have PSOLA's minHz problem too?
+
+Two follow-ups after the above.
+
+**Cross-fade reverted.** Two independent reasons, not just the latency
+number: (1) the alignment search never engaged for realistic jitter —
+0/214 grains corrected at +1st, 0/190 at -1st, while ~60% of grains
+carried a substantial (near 50/50) blend weight, meaning the fix was
+blending at nominal, uncorrected offset on most grains, continuously —
+precisely finding #20's diagnosed comb-filtering mechanism, now happening
+far more pervasively than assumed. Checked directly: no clipping (output
+never exceeds 0.999, no flat-topped runs) — the distortion is comb-filter
+shaped, not saturation. (2) Even the tight-derived 60ms bound is ~2x the
+single-bucket baseline with no tuning path back toward it, since the cost
+is structural (bucket B's content requires one more period of lookahead
+regardless of whether alignment corrects anything). `PSOLAPitchShifter.h`/
+`.cpp` and the latency test restored to exactly `feature/psola-grain-
+width-fix`'s state (verified zero diff); 85/85 tests pass. Every waveform
+render in the diagnostic artifact regenerated against this actual
+(reverted) implementation — the crossfade-specific renders were retired,
+not just re-labeled, since they no longer describe anything shipping.
+
+**Does the phase vocoder have an equivalent, just-undocumented, low-
+frequency compromise?** A fair question raised directly: PSOLA's
+`minHz=80Hz` floor is explicit, by-ear validated, and documented as the
+reason its latency can't go lower. Grepping `PitchShifter.h`/
+`PitchDetector.h` found **no** equivalent floor documented anywhere for
+the phase vocoder — and the `windowSizeMs=30` tightening's own
+confirmation ("real vocal input... sounds fine") never specified testing
+bass-register content specifically. Real asymmetry in how thoroughly each
+engine was characterized, worth checking rather than assuming either way.
+
+Tested directly (`PhaseVocoderLowFreqProbe.cpp`): artifact energy at the
+*current* `windowSizeMs=30` (1024-sample frame @ 44.1kHz) across
+220/110/82.4/65.4/55Hz — all held under 0.8%, including 55Hz, where the
+analysis window contains only **1.28 periods** of the fundamental:
+
+| freq | periods in 1024-sample frame | artifact energy% |
+|---|---|---|
+| 220Hz | 5.11 | 0.560 |
+| 110Hz | 2.55 | 0.296 |
+| 82.4Hz | 1.91 | 0.742 |
+| 65.4Hz | 1.52 | 0.614 |
+| 55Hz | 1.28 | 0.792 |
+
+**No degradation found, even well below one full period-and-a-half.**
+The documentation asymmetry is real (worth a one-line doc note on
+`PitchShifter.h` explaining why no floor is needed, not attempted here),
+but the underlying worry doesn't hold up under measurement: the phase
+vocoder's frequency-domain bin relocation doesn't need multiple cycles in
+the window the way a period-based grain technique structurally does, so
+its latency win isn't bought via an equivalent-but-unvalidated
+compromise. Scoped caveat: this is a stationary-tone, spectral-purity
+metric — it says nothing about phase-tracking accuracy on real,
+non-stationary bass content (vibrato, pitch glide), which is a different
+question this metric can't answer either way. Practical consequence: if
+PSOLA's `minHz` is ever raised to chase latency parity, that's a real
+trade against this project's own stated bass-vocal correctness
+requirement, on its own merits — not "matching a compromise the phase
+vocoder already made," because no such compromise was found.
