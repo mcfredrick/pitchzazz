@@ -270,6 +270,8 @@
     <span class="arrow">&rarr;</span>
     <a href="#shift"><span class="dot" style="background:var(--green)"></span>shift</a>
     <span class="arrow">&rarr;</span>
+    <a href="#quality"><span class="dot" style="background:var(--cyan)"></span>quality</a>
+    <span class="arrow">&rarr;</span>
     <a href="#hotswap"><span class="dot" style="background:var(--magenta)"></span>hot-swap</a>
   </div>
 </nav>
@@ -293,6 +295,7 @@
       <span class="chip"><abbr class="ac" tabindex="0" data-tip="Short-Time Fourier Transform — repeated FFTs over overlapping windows, used to track how frequency content changes over time">STFT</abbr> phase vocoder</span>
       <span class="chip"><abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add — shifts pitch by re-spacing time-domain grains at pitch marks, not by touching frequency content">TD-PSOLA</abbr></span>
       <span class="chip"><abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add — time-stretches audio by splicing overlapping windows at the best-correlated offset, not a fixed hop">WSOLA</abbr> + varispeed resample</span>
+      <span class="chip">objective THD+N / artifact-energy metrics</span>
       <span class="chip">atomic hot-swap</span>
     </div>
   </header>
@@ -873,7 +876,154 @@
       </table>
     </div>
     <p style="color:var(--ink-dim); font-size:14.5px; margin-top:-6px;">All three are hot-swappable mid-performance
-      with no dropout &mdash; that's its own mechanism, covered next.</p>
+      with no dropout &mdash; that mechanism is covered further down. First: which of the three actually keeps
+      the shifted signal clean, measured rather than described.</p>
+
+  </section>
+
+  <!-- =========================================================
+       QUALITY
+  ========================================================== -->
+  <section class="stage" id="quality">
+    <div class="stage-head">
+      <div class="stage-eyebrow" style="color:var(--cyan)"><span class="dot" style="background:var(--cyan)"></span>04 &middot; quality</div>
+      <h2>Which engine actually stays clean &mdash; measured, not described</h2>
+      <p>Every artifact claim on this page so far has been qualitative. <code>QualityMetrics</code> puts a number on
+        it: one windowed <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform — converts a signal between the time and frequency domains in O(N log N)">FFT</abbr> of a shifter's output against the known target fundamental, reduced
+        to <strong>THD+N</strong> (energy outside the fundamental) and <strong>artifact energy</strong> &mdash; the
+        sharper question &mdash; energy outside the fundamental's <em>entire harmonic comb</em>. A clean shift has
+        real energy at its harmonics, just none outside them.</p>
+    </div>
+
+    <div class="callout"><strong>Real numbers:</strong> a 220Hz test tone through each engine's actual shifter
+      class, swept &plusmn;12 semitones &mdash; the same synthetic-signal / real-code / numeric-threshold technique
+      every other test on this page uses.</div>
+
+    <figure>
+      <div class="fig-frame">
+        <svg viewBox="0 0 900 260" role="img" aria-label="Grouped bar chart: artifact energy percent by engine, at five semitone shifts each (minus twelve, minus three, zero, three, twelve). Phase vocoder stays under one percent at every shift. TD-PSOLA stays under one and a half percent at every shift except twelve semitones up, where it jumps to ninety-nine percent. Varispeed sits around twenty-two to twenty-four percent for zero and negative shifts, rising to about twenty-seven to twenty-nine percent for positive shifts.">
+          <text x="20" y="22" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#f1f1f6">ARTIFACT ENERGY% by shift (THD+N% is in the table below)</text>
+
+          <!-- y axis gridlines + labels: 0/25/50/75/100% -->
+          <g font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#8a8d9c">
+            <line x1="60" y1="210" x2="880" y2="210" stroke="#2c3140" stroke-width="1"/>
+            <text x="52" y="214" text-anchor="end">0%</text>
+            <line x1="60" y1="170" x2="880" y2="170" stroke="#2c3140" stroke-width="1" stroke-dasharray="2 3"/>
+            <text x="52" y="174" text-anchor="end">25%</text>
+            <line x1="60" y1="130" x2="880" y2="130" stroke="#2c3140" stroke-width="1" stroke-dasharray="2 3"/>
+            <text x="52" y="134" text-anchor="end">50%</text>
+            <line x1="60" y1="90" x2="880" y2="90" stroke="#2c3140" stroke-width="1" stroke-dasharray="2 3"/>
+            <text x="52" y="94" text-anchor="end">75%</text>
+            <line x1="60" y1="50" x2="880" y2="50" stroke="#2c3140" stroke-width="1" stroke-dasharray="2 3"/>
+            <text x="52" y="54" text-anchor="end">100%</text>
+          </g>
+
+          <!-- y axis title, rotated -->
+          <text x="24" y="130" text-anchor="middle" transform="rotate(-90 24 130)" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#8a8d9c" letter-spacing="0.06em">ARTIFACT ENERGY %</text>
+
+          <!-- x axis title -->
+          <text x="470" y="256" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#8a8d9c" letter-spacing="0.06em">SHIFT, SEMITONES (per engine, left&rarr;right: &minus;12 &minus;3 0 +3 +12)</text>
+
+          <!-- Phase Vocoder: -12=0.30 -3=0.57 0=0.56 3=0.43 12=0.82, all near the 2px visibility floor -->
+          <g fill="#00e5ff">
+            <rect x="108" y="208" width="30" height="2" fill-opacity="0.25"/>
+            <rect x="144" y="208" width="30" height="2" fill-opacity="0.45"/>
+            <rect x="180" y="208" width="30" height="2" fill-opacity="0.65"/>
+            <rect x="216" y="208" width="30" height="2" fill-opacity="0.85"/>
+            <rect x="252" y="208" width="30" height="2" fill-opacity="1.0"/>
+          </g>
+          <g font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c" text-anchor="middle">
+            <text x="123" y="221">&minus;12</text><text x="159" y="221">&minus;3</text><text x="195" y="221">0</text><text x="231" y="221">+3</text><text x="267" y="221">+12</text>
+          </g>
+          <text x="195" y="238" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" fill="#f1f1f6">Phase Vocoder</text>
+
+          <!-- TD-PSOLA: -12=0.57 -3=1.23 0=0.56 3=1.20 12=99.18 -->
+          <g fill="#00e5ff">
+            <rect x="383" y="208" width="30" height="2" fill-opacity="0.25"/>
+            <rect x="419" y="208" width="30" height="2" fill-opacity="0.45"/>
+            <rect x="455" y="208" width="30" height="2" fill-opacity="0.65"/>
+            <rect x="491" y="208" width="30" height="2" fill-opacity="0.85"/>
+            <rect x="527" y="51.3" width="30" height="158.7" fill-opacity="1.0"/>
+          </g>
+          <text x="542" y="43" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#00e5ff">99.18%</text>
+          <g font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c" text-anchor="middle">
+            <text x="398" y="221">&minus;12</text><text x="434" y="221">&minus;3</text><text x="470" y="221">0</text><text x="506" y="221">+3</text><text x="542" y="221">+12</text>
+          </g>
+          <text x="470" y="238" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" fill="#f1f1f6">TD-PSOLA</text>
+
+          <!-- Varispeed: -12=23.57 -3=22.75 0=22.34 3=27.37 12=28.74 -->
+          <g fill="#00e5ff">
+            <rect x="658" y="172.3" width="30" height="37.7" fill-opacity="0.25"/>
+            <rect x="694" y="173.6" width="30" height="36.4" fill-opacity="0.45"/>
+            <rect x="730" y="174.3" width="30" height="35.7" fill-opacity="0.65"/>
+            <rect x="766" y="166.2" width="30" height="43.8" fill-opacity="0.85"/>
+            <rect x="802" y="164.0" width="30" height="46.0" fill-opacity="1.0"/>
+          </g>
+          <g font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" fill="#8a8d9c" text-anchor="middle">
+            <text x="673" y="221">&minus;12</text><text x="709" y="221">&minus;3</text><text x="745" y="221">0</text><text x="781" y="221">+3</text><text x="817" y="221">+12</text>
+          </g>
+          <text x="745" y="238" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" fill="#f1f1f6">Varispeed</text>
+        </svg>
+      </div>
+      <figcaption>This chart plots <strong>artifact energy% only</strong> across all five measured shifts &mdash;
+        the table below has both metrics, including THD+N% and the undefined case at PSOLA &minus;12st. Phase
+        vocoder bars are drawn at a 2px visibility floor, not their true sub-pixel height. Note the shape, not just
+        the endpoints: TD-PSOLA is fine everywhere <em>except</em> +12st, not a gradual slide &mdash; and Varispeed's
+        baseline shift is already present at &minus;12/&minus;3/0 before climbing further on the positive side.</figcaption>
+    </figure>
+
+    <div class="math-card cyan">
+      <div class="mc-label">the definitions</div>
+      <div class="math-line"><span class="k">THD+N%</span><span class="v">100 &middot; &radic;((totalEnergy &minus; fundamentalEnergy) / fundamentalEnergy) &mdash; standard AES17-style ratio, relative to the fundamental alone</span></div>
+      <div class="math-line"><span class="k">artifact energy%</span><span class="v">100 &middot; &radic;((totalEnergy &minus; harmonicEnergy) / totalEnergy) &mdash; energy outside <em>every</em> harmonic, not just the fundamental</span></div>
+      <div class="math-line"><span class="k">why both</span><span class="v">TD-PSOLA at &minus;12st: THD+N is undefined (the true fundamental nearly vanishes), yet artifact energy is 0.57% &mdash; as clean as unison. Either number alone would mislead.</span></div>
+    </div>
+
+    <div class="compare">
+      <table class="compare-table">
+        <thead><tr><th>engine</th><th>shift</th><th>THD+N%</th><th>artifact energy%</th></tr></thead>
+        <tbody>
+          <tr><td><span class="swatch" style="background:var(--cyan)"></span>Phase Vocoder</td><td>&minus;12 to +12 st</td><td>0.30 &ndash; 0.82</td><td>0.30 &ndash; 0.82</td></tr>
+          <tr><td><span class="swatch" style="background:var(--cyan)"></span>TD-PSOLA</td><td>0 st</td><td>0.56</td><td>0.56</td></tr>
+          <tr><td><span class="swatch" style="background:var(--cyan)"></span>TD-PSOLA</td><td>&minus;12 st</td><td>undefined</td><td>0.57</td></tr>
+          <tr><td><span class="swatch" style="background:var(--cyan)"></span>TD-PSOLA</td><td>+12 st</td><td>775.86</td><td><strong>99.18</strong></td></tr>
+          <tr><td><span class="swatch" style="background:var(--cyan)"></span>Varispeed</td><td>0 st</td><td>22.96</td><td>22.34</td></tr>
+          <tr><td><span class="swatch" style="background:var(--cyan)"></span>Varispeed</td><td>&minus;12 / +12 st</td><td>24.61 / 30.01</td><td>23.57 / 28.74</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="color:var(--ink-dim); font-size:14.5px;">The phase vocoder drops any bin that would land above
+      Nyquist instead of wrapping it &mdash; structural anti-aliasing, and it shows: clean across the whole range.
+      TD-PSOLA breaks down asymmetrically at the extremes: severe and broad at +12 semitones, narrow (fundamental
+      collapse, not noise) at &minus;12. Varispeed's resampler has no anti-aliasing pre-filter by design, same as
+      physical tape &mdash; now with a real number attached instead of a comment predicting it.</p>
+    <p style="color:var(--ink-dim); font-size:14.5px; margin-top:-6px;">Not attempted here: scoring the TD-PSOLA
+      crackle/beat artifact from real singing. It isn't aliasing &mdash; PSOLA never resamples, and a stationary
+      tone can't expose it either way, which is itself the tell &mdash; it's a grain-boundary discontinuity plus a
+      beat between the fixed analysis grid and the voice's natural jitter. Three automated approaches already
+      failed to score it, and a stationary-tone metric like this one can't either. Left open, not papered over.</p>
+
+    <div class="math-card cyan">
+      <div class="mc-label">where to spend time next &mdash; not yet done</div>
+      <div class="math-line"><span class="k">Varispeed fix</span><span class="v">isolate resampler / WSOLA / gain-ramp separately &mdash; the 22% baseline conflates all three, and this is the one engine where an anti-aliasing pre-filter is actually worth A/B testing</span></div>
+      <div class="math-line"><span class="k">crackle measurement</span><span class="v">not a fix &mdash; a spectral-flux/onset metric (frame-to-frame discontinuity, not one long FFT) might finally let a <em>future</em> fix attempt be verified with data, which is what the reverted cross-fade attempt lacked</span></div>
+    </div>
+
+    <div class="callout"><strong>PSOLA fix, verified:</strong> the mechanism (grain width fixed to the original
+      period while spacing shrinks with shift &mdash; overlap grows as 2&middot;multiplier&middot;shiftRatio) gives
+      an exact formula that undoes it, <code>1/shiftRatio</code>. Real before/after at +12st:
+      <strong>99.18% &rarr; 2.20%</strong> artifact energy, ~45x.</div>
+
+    <div class="callout"><strong>...then accepted TD-PSOLA as-is, checked against real usage.</strong> This
+      plugin's scale correction can mathematically never request more than <strong>1 semitone</strong> &mdash; all
+      7 modes are rotations of the same step pattern, max 2-semitone gap between degrees, enforced by a test
+      (<code>tests/DSP/ScaleTests.cpp</code>), not just observed. In that actual range the fix does nothing &mdash; +0.5st:
+      1.12% &rarr; 1.13%, +1.0st: 1.29% &rarr; 1.31%, +1.5st: 1.06% &rarr; 1.10%, all within a hair of the 0.56%
+      unison floor already. The +12st win is real, but this feature never reaches +12st. Reverted the fix from
+      the live audio path (<code>git revert</code>, kept in history rather than erased); the formula, its tests,
+      and the wide-range data all stay &mdash; a ready answer for the not-yet-built "vocoder mode" (arbitrary-
+      interval harmonization), which would actually need it. <code>docs/FINDINGS.md</code> #26/#27.</div>
 
   </section>
 
@@ -882,7 +1032,7 @@
   ========================================================== -->
   <section class="stage" id="hotswap">
     <div class="stage-head">
-      <div class="stage-eyebrow" style="color:var(--magenta)"><span class="dot" style="background:var(--magenta)"></span>04 &middot; hot-swap</div>
+      <div class="stage-eyebrow" style="color:var(--magenta)"><span class="dot" style="background:var(--magenta)"></span>05 &middot; hot-swap</div>
       <h2>Changing engines live, with no dropout</h2>
       <p>Switching from the phase vocoder to <abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add — shifts pitch by re-spacing time-domain grains at pitch marks, not by touching frequency content">TD-PSOLA</abbr> mid-performance can't pause audio to do it. The handoff
         is <strong>one atomic pointer exchange</strong>, picked up by the worker thread between blocks &mdash;
