@@ -416,6 +416,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     Source/DSP/VarispeedCorrectorEngine.h
     Source/DSP/PitchEngineRegistry.cpp
     Source/DSP/PitchEngineRegistry.h
+    Source/DSP/QualityMetrics.cpp
+    Source/DSP/QualityMetrics.h
 )
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)

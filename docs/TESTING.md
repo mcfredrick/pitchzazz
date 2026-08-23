@@ -149,3 +149,127 @@ two engines' phase accumulators evolve completely independently with no
 shared reference point, which amplitude-blending — linear or equal-power
 — can improve but can't fully resolve. See `docs/FINDINGS.md` #14 for
 the full iteration history and numbers.
+
+## Objective quality metrics — putting a number on "does this sound clean"
+
+Everything above turns timing/energy/dropout questions into numbers.
+Spectral *cleanliness* — is a shifted tone's output actually a clean
+harmonic reconstruction, or does it leak energy where none should be —
+was still assessed only by ear, or documented as a known-but-unmeasured
+limitation (`cpp-plugin/Source/DSP/VarispeedResampler.h`'s own class doc:
+"an extreme up-shift could alias harshly... not tuned against by ear yet,
+flagged here rather than assumed"). `cpp-plugin/Source/DSP/QualityMetrics.{h,cpp}`
+closes that gap with two numbers, computed from one windowed FFT of a
+steady-state segment of a shifter's output against a *known* target
+fundamental:
+
+- **THD+N%** — the standard AES17-style ratio: everything that isn't the
+  fundamental, relative to the fundamental.
+- **Artifact energy%** — energy that isn't explained by *any* harmonic of
+  the target fundamental, relative to total energy. This is the metric
+  that actually answers the anti-aliasing question this feature grew out
+  of: a cleanly shifted tone has real energy at its harmonics (so THD+N
+  alone doesn't distinguish "shifted cleanly" from "shifted with
+  artifacts"), but a clean shift shouldn't have energy *outside* that
+  harmonic comb — exactly what resampling aliasing or grain-boundary
+  discontinuities produce and clean frequency-domain bin-relocation or
+  time-domain grain-repositioning don't.
+
+Same technique as every test above: synthetic known tone (a stationary
+220Hz sine, chosen so the spectrum is unambiguous — see the caveat below)
+through the real shifter classes at a swept range of semitone shifts,
+asserting numeric thresholds set from a real measurement run
+(`cpp-plugin/benchmarks/QualityMetricsProbe.cpp`), not guessed in
+advance. Drives `PitchShifter`/`PSOLAPitchShifter`/`VarispeedShifter`
+directly (each takes an explicit, controllable `semitoneShift`, same as
+every existing shifter-level test in this codebase) rather than the full
+`PitchEngine::process()` pipeline — `RustCorrectorEngine` has no raw-shift
+entry point across its FFI boundary (only the full detect+quantize+shift
+`process()`), so it's out of this particular sweep; it shares its actual
+DSP with the native phase-vocoder engine (ported, not reimplemented —
+`docs/COMPARISON.md`), so the native engine's numbers below are the
+representative ones for that mechanism.
+
+**Real measured results** (220Hz test tone, 44.1kHz, `QualityMetricsProbe`):
+
+| Engine | Shift | THD+N% | Artifact energy% |
+|---|---|---|---|
+| Phase vocoder | -12 to +12 | 0.30 – 0.82 | 0.30 – 0.82 |
+| PSOLA | 0 | 0.56 | 0.56 |
+| PSOLA | -12 | *(undefined — see below)* | 0.57 |
+| PSOLA | +12 | 775.86 | **99.18** |
+| Varispeed | 0 | 22.96 | 22.34 |
+| Varispeed | -12 / +12 | 24.61 / 30.01 | 23.57 / 28.74 |
+
+Three real findings, not just a table:
+
+1. **The phase vocoder stays clean across the entire ±12 semitone range**
+   (under ~1% on both metrics). Matches the theory: `PitchShifter.cpp`'s
+   bin-relocation loop explicitly drops any bin that would land above
+   Nyquist (`if (index < halfFrameSize)`) rather than wrapping/aliasing
+   it — this is the anti-aliasing mechanism, built into the algorithm
+   itself rather than a separate filter stage.
+2. **PSOLA is clean at unison but breaks down sharply and asymmetrically
+   at the extremes.** At +12 semitones, 99.18% of the output's energy
+   sits outside the target fundamental's harmonic comb — a real, severe
+   artifact, consistent with the grain-boundary limitation
+   `PSOLAPitchShifter.h`'s own class doc already documents
+   (`docs/FINDINGS.md` #19/#20) but never previously quantified. At -12,
+   something different and genuinely interesting happens: THD+N's ratio
+   becomes undefined (`QualityMetrics::Result::thdPlusNValid == false`)
+   because almost none of the output's energy survives at the true
+   110Hz fundamental itself — it's nearly all on the upper harmonics
+   instead — but artifact energy stays low (0.57%), meaning that energy
+   is still cleanly harmonic, just redistributed, not turned to noise.
+   A metric that silently reported a huge or NaN THD+N% here instead of
+   flagging it would have been actively misleading — worth noting for
+   anyone extending this class.
+3. **Varispeed carries real, substantial artifact energy even at
+   unison** (~22%), confirming with an actual number what its own source
+   comment already predicted qualitatively — its cubic-Hermite resampler
+   has no anti-aliasing pre-filter by design (see that class's own doc
+   for why: physical tape/vinyl varispeed has none either, and fighting
+   that is fighting the effect the engine exists to produce). Rises
+   further at extreme upward shifts (~29% at +12). **Methodology
+   caveat, stated plainly rather than glossed over:** the probe drives
+   `VarispeedShifter` in fixed 2048-sample blocks, the same way a real
+   caller does — but `VarispeedShifter::shiftPitch`'s own anticipatory
+   click-suppression gain ramp (fading toward silence when the pipeline
+   temporarily can't fill a whole block) runs on every call, not just at
+   startup, so some of this baseline plausibly reflects that ramp rather
+   than pure interpolation error alone. The two sources weren't
+   separated in this pass — what's measured is the total a real caller
+   would actually experience, which is the number that matters for an
+   engine-quality comparison even without that separation.
+
+**What this deliberately does *not* attempt:** discriminating the PSOLA
+crackle/beat artifact from `docs/FINDINGS.md` #19/#20. Worth being
+precise about first: **that artifact isn't aliasing.** PSOLA never
+resamples — `placeGrainAt` repositions unmodified, already-sampled
+grains rather than recomputing values at a fractional/resampled
+position — so there's no decimation event for high-frequency content to
+fold back through. The real mechanism is a grain-boundary discontinuity
+(the read position snaps to the nearest fixed analysis bucket, so
+crossing a boundary jumps to a slightly different, not-quite-identical
+grain — real voice drifts cycle-to-cycle) plus a beat between that fixed
+grid and the signal's natural jitter. The diagnostic that confirms this
+rather than just asserting it: aliasing is a linear, frequency-dependent
+phenomenon that doesn't care whether the source is stationary, but this
+artifact requires non-stationarity to appear at all — `psola.rs`'s own
+test module doc already establishes that a stationary sine cannot expose
+it, since every analysis bucket then contains identical content
+regardless of the boundary. That non-stationarity dependence is the
+signature of a discontinuity/beat mechanism, not spectral fold-back.
+
+That distinction is also *why* this metric can't score it: it only
+exists on non-stationary content, and a tremolo-modulated tone's own
+genuine amplitude-modulation sidebands aren't distinguishable from
+"artifact energy" by a fundamental-harmonic-comb metric like this one
+without separately modeling the modulation itself. Three different
+automated approaches already failed to discriminate that specific
+artifact; running a fourth, structurally-mismatched attempt just to have
+tried again would have produced a number without a valid interpretation.
+This metric answers a different, narrower, well-posed question — spectral
+purity of a *clean, stationary* shift — and the crackle question stays
+exactly as documented in Findings #19/#20: real, understood, and not yet
+solved.
