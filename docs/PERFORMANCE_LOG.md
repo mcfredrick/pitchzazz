@@ -989,3 +989,155 @@ number chosen to preserve creative headroom. Does not fully reclaim
 TD-PSOLA's latency lead over the now-tightened phase vocoder (31ms vs.
 21-23ms) — see `docs/ALGORITHMS.md` for why `minHz` was deliberately left
 alone rather than pushed further to try to close that remaining gap.
+
+## 2026-08-23 — A 4th automated attempt at the crackle/beat artifact, also inconclusive (and why)
+
+Context: revisiting `docs/FINDINGS.md` #19/#20's crackle/beat artifact on
+`feature/psola-crackle-latency` (branched off this branch). Three prior
+automated approaches (documented in `PSOLAPitchShifterTests.cpp`'s own
+comment) failed to discriminate broken from fixed. Before attempting
+another fix, tried a genuinely different detection methodology first,
+specifically targeting the diagnosed mechanism rather than reusing any of
+the three prior signal/metric shapes.
+
+**Why the prior attempts likely couldn't work, precisely:** the existing
+`tremoloSineBlock` test signal modulates *amplitude* only — the underlying
+period never moves, so every analysis bucket of a tremolo tone is still
+exactly one true period long and interchangeable. It cannot exercise the
+mechanism finding #20 actually describes (real cycle-to-cycle *period*
+jitter making adjacent buckets genuinely different content), regardless of
+how the resulting signal is scored.
+
+**New signal**: `benchmarks/PSOLACrackleProbe.cpp`'s `jitteredVoice()` —
+phase-integrated FM (not a closed-form `sin(2*pi*f*t)` with `f` swapped in,
+which wouldn't correspond to a physically coherent waveform), 2% depth,
+two incommensurate slow rates (11.3Hz + 17.7Hz) so the wobble isn't one
+clean periodicity that could alias with the analysis-bucket spacing.
+
+**New metric**: rather than a global statistic, replicated
+`placeGrainAt()`'s own mark-generation and floor-based bucket formula
+externally (from public state only — `getLatencySamples()` plus the fixed
+`detectedHz` passed in) to know exactly which synthesis marks are a
+*reuse* (bucket delta 0, the pitch-up case) or a *skip* (bucket delta >1,
+the pitch-down case) versus *normal* forward progression (delta exactly
+1, the harmless common case — including 100% of marks at unison, which a
+first version of this classifier got wrong by treating "any bucket
+change" as suspect; delta==1 happens on every single mark at 1:1 spacing
+and is not a discontinuity risk). Local roughness (mean |second
+difference| in a small window around each mark) was compared between
+groups.
+
+**Result — still ≈1.0 everywhere, i.e. still no discriminating signal**:
+
+| shift | reuse/normal ratio | skip/normal ratio |
+|---|---|---|
+| -12st | — (no normal marks; ratio undefined) | — |
+| -7st | — | 0.999 |
+| -3st | — | 1.005 |
+| 0st | — (no reuse/skip marks at unison) | — |
+| +3st | 1.007 | — |
+| +7st | 1.001 | — |
+| +12st | 1.164 | — |
+
+The mark classification itself is verified correct (reuse only appears at
+positive shifts, skip only at negative, zero of either at unison — exactly
+matching theory), so this isn't the same classifier bug as the first
+attempt; the roughness signal itself just isn't there in a way this metric
+can see.
+
+**Why, most likely**: finding #19 describes the artifact as "crackle
+**plus a low-frequency beat**." A beat is a slow spectral-interference
+phenomenon between two near-identical frequencies — it doesn't manifest as
+a sharp local time-domain discontinuity at all, which is the only thing a
+small-window second-difference metric can detect. Separately, the grain's
+own Hann window tapers to zero at its edges, so even a hard content swap
+between two different grains is spread smoothly across the entire
+overlap-add region rather than landing as a single-sample jump — the
+mechanism may simply not produce the kind of signal this class of metric
+is built to find, independent of window size or jitter depth.
+
+**Conclusion**: this is now a 4th independently-designed automated
+approach that fails to discriminate this artifact, each for a different
+diagnosed reason (external reference: phase-meaningless; stationary tone:
+mechanism not present at all; tremolo: same flaw, amplitude not period;
+correlation-outlier ratio: measured backwards on one run; boundary-
+localized roughness: right signal, wrong kind of artifact to look for
+locally). Detecting the *beat* component would need a fundamentally
+different tool — long-window spectral analysis for sidebands near the
+fundamental, not a time-domain per-mark statistic. Not attempted here;
+flagged as the concrete next idea if this is revisited, rather than a 5th
+variation on the same time-domain approach. The correlation-aligned
+cross-fade fix `docs/FINDINGS.md` #20 already identifies as the right fix
+is being implemented on the strength of that DSP reasoning, same as findings
+#19 originally shipped on — not gated on an automated proof that, on this
+evidence, may not be achievable with this class of technique at all.
+
+## 2026-08-23 — Correlation-aligned cross-fade implemented; real, substantial latency cost measured
+
+Implemented the fix `docs/FINDINGS.md` #20 itself identifies as the real
+one: before blending bucket A and bucket B, search a small window for the
+offset that best aligns bucket B to bucket A (normalized cross-correlation,
+hard minimum-improvement margin over nominal — the exact same pattern
+`WSOLATimeStretcher::searchBestOffset` already established in this
+codebase, findings #23/#24), then blend with proximity weights instead of
+snapping to bucket A alone. `PSOLAPitchShifter.cpp`'s `searchAlignmentOffset`
+and rewritten `placeGrainAt`.
+
+**Latency cost, derived twice — first wrong, then proven correct:**
+
+Blending bucket B requires its content available too — one whole period of
+extra reach, plus the alignment search radius, beyond the original
+single-bucket read. First derivation copied the original formula's
+doubling shape literally (`latencySamples = 2 * maxForwardReachSamples`)
+and measured **89.07ms @ 44.1kHz / 88.83ms @ 48kHz** (`PSOLALatencyProbe`)
+— matched the formula exactly, so not a bug, but a real question: is
+doubling actually necessary, or copied blindly from a case where it
+happened to be tight for an unrelated reason?
+
+Re-derived from first principles (proof in `PSOLAPitchShifter.cpp`'s
+constructor comment): reading accumulator slot P is safe once every mark
+that could still touch it has fired, which requires exactly
+`latencySamples >= maxForwardReachSamples + maxHalfWidthSamples` — not
+`2 * maxForwardReachSamples`. The original single-bucket formula
+(`2 * maxHalfWidthSamples`) turns out to be this exact same tight bound in
+disguise, not extra headroom: it's what the general formula degenerates to
+when `maxForwardReachSamples == maxHalfWidthSamples`, which was always true
+before this change. Re-measured after applying the tight formula:
+**60.18ms @ 44.1kHz / 60.04ms @ 48kHz** (`PSOLALatencyProbe`, exact match
+to the claimed value again) — a real 32% reduction from the naive-doubling
+version, obtained by proof, not by loosening a margin and hoping.
+
+| | 44.1kHz | 48kHz | vs. phase vocoder (21-23ms) | vs. single-bucket baseline (31.29/31.25ms) |
+|---|---|---|---|---|
+| Single-bucket (pre-fix) | 31.29ms | 31.25ms | already ~1.4-1.5x higher | — |
+| Cross-fade, naive `2x` margin | 89.07ms | 88.83ms | ~4x higher | ~2.85x higher |
+| Cross-fade, tight-derived margin | 60.18ms | 60.04ms | ~2.7x higher | ~1.92x higher |
+
+**Quality metrics, re-measured — no measurable change**: `QualityMetricsProbe`'s
+full sweep after the fix: PSOLA artifact-energy% at {-12, -3, 0, +3, +12}st
+= {0.5629, 1.2606, 0.5600, 1.2536, 99.3436}, versus the pre-fix numbers
+already published on the live site's quality chart = {0.57, 1.23, 0.56,
+1.20, 99.18}. Effectively identical (within measurement noise) at every
+shift amount, including the already-separately-diagnosed +12st comb-
+filtering cliff (findings #26/#27, unrelated to this fix — grain *width*
+overlap, not grain *content* alignment, so no change here is expected or
+concerning). Consistent with this session's earlier finding: THD+N/
+artifact-energy is the wrong class of metric for this artifact (it's a
+harmonic-comb energy measure; the crackle/beat mechanism doesn't
+redistribute energy in a way that metric is built to see), not evidence
+the fix does nothing perceptually.
+
+**Conclusion — implemented and correctness-verified, not recommended to
+ship as-is**: all 80 existing tests pass (including the energy-preservation
+and frequency-reproduction tests, which would have caught wrong output),
+and the latency probe confirms the derivation is exactly tight, not
+under-margined. But even at the tight bound, TD-PSOLA's latency goes from
+already-behind-the-phase-vocoder (31ms vs. 21-23ms) to substantially
+farther behind (60ms vs. 21-23ms) — for a quality improvement that remains
+unverified by every automated technique tried (four independent attempts
+now, `docs/FINDINGS.md`'s and this log's 2026-08-23 entries). Kept in
+`feature/psola-crackle-latency` for the record and for a real by-ear
+evaluation, not merged to main or wired as the default — the cost is
+certain and measured; the benefit is only a DSP-reasoning argument, same
+epistemic position finding #19 originally shipped from before being
+reverted.
