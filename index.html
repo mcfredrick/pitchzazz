@@ -127,6 +127,12 @@
     padding:22px 20px 16px; overflow-x:auto;
   }
   .fig-frame svg{ display:block; width:100%; height:auto; min-width:560px; }
+  .fig-frame.full-bleed{
+    width:100vw; max-width:100vw;
+    margin-left:calc(50% - 50vw); margin-right:calc(50% - 50vw);
+    border-radius:0; border-left:none; border-right:none;
+    padding:22px clamp(20px, 5vw, 70px) 16px;
+  }
   figcaption{
     font-family:var(--mono); font-size:12px; color:var(--ink-dim);
     margin-top:10px; padding:0 2px; line-height:1.55;
@@ -724,40 +730,65 @@
       </figure>
 
       <figure>
-        <div class="fig-frame">
-          <svg viewBox="0 0 900 300" role="img" aria-label="Three rows compare the same pitch-up shift. Top: a reference waveform, four repeating cycles. Middle: naive resampling shrinks both the spacing and the internal shape of each cycle together, changing the formants — the chipmunk effect. Bottom: TD-PSOLA re-spaces identical, unmodified grains closer together so they overlap, while each grain's own internal shape stays exactly the same as the reference.">
-            <text x="20" y="20" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#8a8d9c">original &mdash; 4 cycles, one period each (reference)</text>
-            <line x1="40" y1="70" x2="240" y2="70" stroke="#2c3140" stroke-width="1"/>
-            <polyline points="40,70 47,35 56,81 65,65 85,70 92,35 101,81 112,65 130,70 137,35 146,81 157,65 175,70 182,35 191,81 202,65 220,70" fill="none" stroke="#8a8d9c" stroke-width="2"/>
+        <div class="fig-frame full-bleed">
+          <svg viewBox="0 0 1520 780" role="img" aria-label="Four rows, same time window throughout. Row one: a reference waveform, six repeating cycles. Row two: naive resampling shrinks both the spacing and the internal shape of each cycle together to raise pitch — the chipmunk effect. Row three: TD-PSOLA raises pitch by re-spacing identical, unmodified grains closer together, so they overlap, while each grain's own shape stays exactly the same as the reference. Row four: TD-PSOLA lowering pitch instead spaces those same unmodified grains farther apart, so they no longer overlap and some analysis grains go unread.">
+            <text x="20" y="24" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="13" fill="#8a8d9c">original &mdash; reference, 6 cycles (same time window in every row below)</text>
+            <line x1="40" y1="100" x2="1240" y2="100" stroke="#2c3140" stroke-width="1"/>
+            <polyline points="40,100 70,10 110,127 160,86 240,100 270,10 310,127 360,86 440,100 470,10 510,127 560,86 640,100 670,10 710,127 760,86 840,100 870,10 910,127 960,86 1040,100 1070,10 1110,127 1160,86 1240,100" fill="none" stroke="#8a8d9c" stroke-width="2.4"/>
 
-            <text x="20" y="100" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#ff3fa4">naive resample &times;1.5 (chipmunk): the cycle's own shape compresses along with the spacing</text>
-            <line x1="40" y1="150" x2="240" y2="150" stroke="#2c3140" stroke-width="1"/>
-            <polyline points="40,150 45,115 51,161 58,145 70,150 75,115 81,161 88,145 100,150 105,115 111,161 118,145 130,150 135,115 141,161 148,145 160,150 165,115 171,161 178,145 190,150 195,115 201,161 208,145 220,150" fill="none" stroke="#ff3fa4" stroke-width="2"/>
+            <text x="20" y="214" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="13" fill="#ff3fa4">naive resample &times;1.5 (pitch up, chipmunk): the cycle's own shape compresses along with the spacing</text>
+            <line x1="40" y1="310" x2="1237" y2="310" stroke="#2c3140" stroke-width="1"/>
+            <polyline points="40,310 60,220 87,337 120,296 173,310 193,220 220,337 253,296 306,310 326,220 353,337 386,296 439,310 459,220 486,337 519,296 572,310 592,220 619,337 652,296 705,310 725,220 752,337 785,296 838,310 858,220 885,337 918,296 971,310 991,220 1018,337 1051,296 1104,310 1124,220 1151,337 1184,296 1237,310" fill="none" stroke="#ff3fa4" stroke-width="2.4"/>
 
-            <text x="20" y="180" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#39ff88">TD-PSOLA &times;1.5: identical grain content, just re-spaced closer &mdash; grains overlap, shape never touched</text>
+            <text x="20" y="404" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="13" fill="#39ff88">TD-PSOLA &times;1.5 (pitch up): same grain, closer spacing &mdash; grains overlap, shape never touched</text>
+            <line x1="40" y1="500" x2="1304" y2="500" stroke="#2c3140" stroke-width="1"/>
             <g stroke="#39ff88" stroke-width="1" stroke-dasharray="3 3" fill="none" opacity="0.35">
-              <rect x="40" y="185" width="45" height="70" rx="4"/>
-              <rect x="70" y="185" width="45" height="70" rx="4"/>
-              <rect x="100" y="185" width="45" height="70" rx="4"/>
-              <rect x="130" y="185" width="45" height="70" rx="4"/>
-              <rect x="160" y="185" width="45" height="70" rx="4"/>
-              <rect x="190" y="185" width="45" height="70" rx="4"/>
+              <rect x="40" y="405" width="200" height="150" rx="4"/>
+              <rect x="173" y="405" width="200" height="150" rx="4"/>
+              <rect x="306" y="405" width="200" height="150" rx="4"/>
+              <rect x="439" y="405" width="200" height="150" rx="4"/>
+              <rect x="572" y="405" width="200" height="150" rx="4"/>
+              <rect x="705" y="405" width="200" height="150" rx="4"/>
+              <rect x="838" y="405" width="200" height="150" rx="4"/>
+              <rect x="971" y="405" width="200" height="150" rx="4"/>
+              <rect x="1104" y="405" width="200" height="150" rx="4"/>
             </g>
-            <g stroke="#39ff88" stroke-width="2" fill="none" opacity="0.6">
-              <polyline points="40,230 47,195 56,241 67,225 85,230"/>
-              <polyline points="70,230 77,195 86,241 97,225 115,230"/>
-              <polyline points="100,230 107,195 116,241 127,225 145,230"/>
-              <polyline points="130,230 137,195 146,241 157,225 175,230"/>
-              <polyline points="160,230 167,195 176,241 187,225 205,230"/>
-              <polyline points="190,230 197,195 206,241 217,225 235,230"/>
+            <g stroke="#39ff88" stroke-width="2.4" fill="none" opacity="0.6">
+              <polyline points="40,500 70,410 110,527 160,486 240,500"/>
+              <polyline points="173,500 203,410 243,527 293,486 373,500"/>
+              <polyline points="306,500 336,410 376,527 426,486 506,500"/>
+              <polyline points="439,500 469,410 509,527 559,486 639,500"/>
+              <polyline points="572,500 602,410 642,527 692,486 772,500"/>
+              <polyline points="705,500 735,410 775,527 825,486 905,500"/>
+              <polyline points="838,500 868,410 908,527 958,486 1038,500"/>
+              <polyline points="971,500 1001,410 1041,527 1091,486 1171,500"/>
+              <polyline points="1104,500 1134,410 1174,527 1224,486 1304,500"/>
+            </g>
+
+            <text x="20" y="594" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="13" fill="#39ff88">TD-PSOLA &divide;1.5 (pitch down): same grain, farther spacing &mdash; grains no longer overlap, some analysis grains go unread</text>
+            <line x1="40" y1="690" x2="1440" y2="690" stroke="#2c3140" stroke-width="1"/>
+            <g stroke="#39ff88" stroke-width="1" stroke-dasharray="3 3" fill="none" opacity="0.35">
+              <rect x="40" y="595" width="200" height="150" rx="4"/>
+              <rect x="340" y="595" width="200" height="150" rx="4"/>
+              <rect x="640" y="595" width="200" height="150" rx="4"/>
+              <rect x="940" y="595" width="200" height="150" rx="4"/>
+              <rect x="1240" y="595" width="200" height="150" rx="4"/>
+            </g>
+            <g stroke="#39ff88" stroke-width="2.4" fill="none" opacity="0.85">
+              <polyline points="40,690 70,600 110,717 160,676 240,690"/>
+              <polyline points="340,690 370,600 410,717 460,676 540,690"/>
+              <polyline points="640,690 670,600 710,717 760,676 840,690"/>
+              <polyline points="940,690 970,600 1010,717 1060,676 1140,690"/>
+              <polyline points="1240,690 1270,600 1310,717 1360,676 1440,690"/>
             </g>
           </svg>
         </div>
-        <figcaption>Same 1.5&times; pitch-up target, two different mechanisms. Naive resampling reads the waveform
-          faster, so each cycle's own shape shrinks along with the spacing between cycles &mdash; that's the
-          formant shift (the "chipmunk" effect). TD-PSOLA instead re-spaces identical, unmodified grains closer
-          together, overlapping via the Hann taper &mdash; the cycle shape, and the formants encoded in it, never
-          change.</figcaption>
+        <figcaption>Same 1.5&times; interval, three mechanisms, one shared time axis. Naive resampling (row two)
+          reads the waveform faster, so each cycle's own shape shrinks along with the spacing between cycles &mdash;
+          that's the formant shift, the "chipmunk" effect. TD-PSOLA re-spaces identical, unmodified grains instead:
+          closer together to raise pitch (row three, grains overlap) or farther apart to lower it (row four, grains
+          stop overlapping and some analysis grains never get read) &mdash; either way the grain's own shape, and
+          the formants encoded in it, never change.</figcaption>
       </figure>
 
       <div class="math-card green">
