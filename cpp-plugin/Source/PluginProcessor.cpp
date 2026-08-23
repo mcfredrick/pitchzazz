@@ -405,6 +405,16 @@ juce::File PitchzazzAudioProcessor::getLogsPath()
     return logsDir;
 }
 
+juce::File PitchzazzAudioProcessor::getRecordingsPath()
+{
+    auto recordingsDir = getApplicationSupportPath().getChildFile ("Recordings");
+
+    if (! recordingsDir.exists())
+        recordingsDir.createDirectory();
+
+    return recordingsDir;
+}
+
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new PitchzazzAudioProcessor();

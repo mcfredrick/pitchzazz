@@ -260,6 +260,37 @@ TEST_CASE ("a narrower grain still preserves signal energy within the existing l
     CHECK (outputRms < inputRms * 3.0f);
 }
 
+TEST_CASE ("chooseGrainWidthMultiplierForShift: theory-derived values, not guessed", "[psola-shifter][grain-width-fix]")
+{
+    // ratio == 1 (unison): no change from the default, the already-clean
+    // baseline this whole formula is anchored to.
+    CHECK (chooseGrainWidthMultiplierForShift (0.0f) == 1.0f);
+
+    // ratio < 1 (any downward shift): left at the default. Overlap only
+    // grows past baseline in the upward direction (see this function's
+    // own doc) -- downward shifts reduce overlap on their own, so there's
+    // no mechanism this formula is meant to counteract there.
+    CHECK (chooseGrainWidthMultiplierForShift (-12.0f) == 1.0f);
+    CHECK (chooseGrainWidthMultiplierForShift (-3.0f) == 1.0f);
+
+    // ratio == 2 (+12 semitones): 1/2 = 0.5, exactly grainWidthMultiplierMin
+    // -- solving overlap = 2*multiplier*shiftRatio = 2 (the unison
+    // baseline) for multiplier at shiftRatio=2 lands precisely on the
+    // existing control's already-tested floor.
+    CHECK (chooseGrainWidthMultiplierForShift (12.0f) == grainWidthMultiplierMin);
+
+    // ratio == 4 (+24 semitones, a full two octaves): 1/4 = 0.25, below
+    // grainWidthMultiplierMin -- clamped rather than asking the shifter
+    // to operate somewhere untested/unsupported by the existing control.
+    CHECK (chooseGrainWidthMultiplierForShift (24.0f) == grainWidthMultiplierMin);
+
+    // ratio ~= 1.19 (+3 semitones): a real, non-edge-case value, checked
+    // against the exact formula rather than just bounds -- 1/1.1892 ~= 0.8409.
+    const float threeSemitoneResult = chooseGrainWidthMultiplierForShift (3.0f);
+    CHECK (threeSemitoneResult > 0.83f);
+    CHECK (threeSemitoneResult < 0.85f);
+}
+
 // Deliberately NOT a test asserting the crackle/beat artifact from
 // docs/FINDINGS.md is fixed — it isn't, currently. A cross-fade between
 // the two nearest analysis buckets was implemented specifically to fix

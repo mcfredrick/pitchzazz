@@ -405,6 +405,9 @@ target_sources(${PROJECT_NAME} PRIVATE
     Source/DSP/VarispeedCorrector.h
     Source/DSP/CorrectorWorker.cpp
     Source/DSP/CorrectorWorker.h
+    Source/DSP/ScopeCapture.h
+    Source/DSP/AudioSessionRecorder.h
+    Source/DSP/ScopeFrameRecorder.h
     Source/DSP/PitchEngine.h
     Source/DSP/NativeCorrectorEngine.cpp
     Source/DSP/NativeCorrectorEngine.h
@@ -416,6 +419,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     Source/DSP/VarispeedCorrectorEngine.h
     Source/DSP/PitchEngineRegistry.cpp
     Source/DSP/PitchEngineRegistry.h
+    Source/DSP/QualityMetrics.cpp
+    Source/DSP/QualityMetrics.h
 )
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)

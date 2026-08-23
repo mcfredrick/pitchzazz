@@ -102,6 +102,33 @@ public:
     float getLastDetectedHz() const noexcept;
     float getLastSemitoneShift() const noexcept;
 
+    /// Nullable rather than a default-valued reference, unlike the
+    /// scalars above -- there's no meaningful "empty" ScopeCapture to
+    /// fall back to before a worker exists, and the GUI already has to
+    /// handle "nothing to draw yet" for its very first few frames
+    /// regardless.
+    [[nodiscard]] const pitchzazz::ScopeCapture* getScopeCapture() const noexcept
+    {
+        return worker != nullptr ? &worker->getScopeCapture() : nullptr;
+    }
+
+    /// The audio half of a scope recording (docs/ROADMAP.md) -- forwards
+    /// to the worker's own handoff-based start/stop (CorrectorWorker.h's
+    /// requestStartRecording doc), a silent no-op before prepareToPlay has
+    /// constructed a worker, same "no worker yet" convention as the other
+    /// forwarding methods here. `sessionDir` must already exist.
+    void requestStartRecording (const juce::File& sessionDir)
+    {
+        if (worker != nullptr)
+            worker->requestStartRecording (sessionDir);
+    }
+    void requestStopRecording() noexcept
+    {
+        if (worker != nullptr)
+            worker->requestStopRecording();
+    }
+    [[nodiscard]] bool isRecording() const noexcept { return worker != nullptr && worker->isRecording(); }
+
     /// The real-time processing budget for one block, in microseconds —
     /// for the GUI's segmented processing-time meter, so it can show
     /// stage cost relative to the budget, not just relative to itself.
@@ -133,6 +160,12 @@ public:
     static juce::File getPresetsPath();
     static juce::File getUserDataPath();
     static juce::File getLogsPath();
+
+    /// Where scope-recording sessions (docs/ROADMAP.md) get written -- one
+    /// timestamped subfolder per recording, created by the editor's Record
+    /// button (see PluginEditor.cpp), not here, since the timestamp needs
+    /// to be chosen at record-start time, not at first access.
+    static juce::File getRecordingsPath();
 
 private:
     // Matches pitch-cli's BLOCK_SIZE/RING_BUFFER_SECONDS/startup-latency

@@ -10,6 +10,14 @@ namespace
     constexpr float pi = 3.14159265358979323846f;
 }
 
+float chooseGrainWidthMultiplierForShift (float semitoneShift) noexcept
+{
+    const float shiftRatio = std::pow (2.0f, semitoneShift / 12.0f);
+    if (shiftRatio <= 1.0f)
+        return 1.0f;
+    return std::clamp (1.0f / shiftRatio, grainWidthMultiplierMin, 1.0f);
+}
+
 PSOLAPitchShifter::PSOLAPitchShifter (double sampleRateIn)
     : sampleRate (sampleRateIn), periodSamples (sampleRate / 150.0) // 150Hz: a reasonable default before any real pitch has been detected
 {

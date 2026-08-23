@@ -157,6 +157,67 @@ private:
     juce::Label shiftValueLabel { {}, "-" };
     juce::Label totalValueLabel { {}, "-" };
 
+    // One-period before/after waveform scope (docs/ROADMAP.md's "one-period
+    // waveform visualization" item) — reads PluginProcessor::getScopeCapture()
+    // on its own 30Hz Timer rather than this editor's shared 10Hz one (see
+    // ScopeComponent's doc for why). Lives in the right-hand column added
+    // when the window grew wider to fit it (see resized()), rather than
+    // competing with the existing single-column controls for vertical space.
+    // Scale-quantization keyboard (docs/ROADMAP.md): the plugin-GUI
+    // counterpart of the companion notebook's pitch-class-ring diagram,
+    // reshaped as a piano keyboard per user request. Sits above the
+    // scope/spectrum panels since "what scale is active and where the
+    // detected pitch sits relative to it" is the more fundamental context
+    // for reading everything below it, not an equal peer to be ordered
+    // arbitrarily.
+    pitchzazz::ScaleKeyboardComponent scaleKeyboard {
+        [this] { return processorRef.getScale(); },
+        [this] { return processorRef.getLastDetectedHz(); },
+        [this] { return processorRef.getLastSemitoneShift(); },
+        [this] { return currentScaleName(); }
+    };
+    juce::String currentScaleName() const;
+
+    pitchzazz::ScopeComponent scopeComponent { [this] { return processorRef.getScopeCapture(); } };
+
+    // Frequency-domain sibling of scopeComponent above, stacked below it in
+    // the same column -- see SpectrumComponent's own class doc for why this
+    // exists (spotting sidebands the time-domain scope alone made easy to
+    // miss). Reads the same ScopeCapture independently rather than sharing
+    // scopeComponent's snapshot, since each component owns its own 30Hz
+    // Timer (ScopeComponent's doc explains why not the editor's shared one).
+    pitchzazz::SpectrumComponent spectrumComponent { [this] { return processorRef.getScopeCapture(); },
+                                                      [this] { return processorRef.getSampleRate(); } };
+
+    // Pauses both scopeComponent and spectrumComponent together -- an
+    // artifact worth a closer look scrolls off in under 100ms at 30Hz, so
+    // "hold the picture still" is the whole point; a single button drives
+    // both rather than two, since inspecting one domain without the other
+    // frozen alongside it isn't a use case this editor needs to support.
+    juce::TextButton freezeButton { "Freeze" };
+    bool isFrozen = false;
+    void toggleFreeze();
+
+    // Scope-recording controls (docs/ROADMAP.md): one button toggles both
+    // halves (audio via processorRef, frames via scopeComponent) together
+    // so they always start/stop in lockstep -- a session with only one of
+    // the two would be useless to scripts/stitch_recording.sh. The status
+    // label doubles as the button's own explanation (elapsed time while
+    // recording, save location once stopped) rather than a separate
+    // caption, matching this editor's existing "label carries the state,
+    // not a tooltip" convention (e.g. the bypass LED).
+    juce::TextButton recordButton { "Record" };
+    juce::Label recordStatusLabel { {}, "" };
+    juce::File currentRecordingSessionDir;
+    juce::int64 recordingStartMs = 0;
+
+    // Opens currentRecordingSessionDir in Finder -- disabled until at least
+    // one recording has been made this session (see toggleRecording()), so
+    // it can never point at a directory that doesn't exist yet.
+    juce::TextButton revealRecordingButton { "Show" };
+
+    void toggleRecording();
+
     // Exponential moving average state — see the class doc for why EMA
     // over a windowed average. alpha tuned for the 10Hz timer below:
     // roughly a 0.5s time constant, smooth without feeling laggy for a
