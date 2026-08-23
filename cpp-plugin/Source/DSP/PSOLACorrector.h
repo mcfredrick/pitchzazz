@@ -48,24 +48,7 @@ public:
     /// clamping/buffer-sizing implications (PSOLAPitchShifter.h). No
     /// phase-vocoder equivalent exists (Corrector has no matching setter)
     /// since a phase vocoder has no concept of "grain."
-    ///
-    /// Calling this manually disables the automatic per-block selection
-    /// documented on `autoGrainWidth` below (docs/FINDINGS.md #26) —
-    /// "the user touched the slider" is the signal that they want
-    /// explicit control from this point on, the same "manual input wins"
-    /// convention this project already uses elsewhere (e.g. retune-speed
-    /// glide snapping instantly on voicing onset rather than blending
-    /// from a stale reading). There is currently no way to re-enable
-    /// auto from the GUI once disabled — a real, open gap, not an
-    /// oversight: this whole fix ships as a listening-test/demo behavior
-    /// (see `process()`'s doc), and building a proper "return to auto"
-    /// affordance is exactly the kind of production-polish decision
-    /// `docs/FINDINGS.md` #26 already flagged as deliberately deferred.
-    void setGrainWidthMultiplier (float multiplier) noexcept
-    {
-        shifter.setGrainWidthMultiplier (multiplier);
-        autoGrainWidth = false;
-    }
+    void setGrainWidthMultiplier (float multiplier) noexcept { shifter.setGrainWidthMultiplier (multiplier); }
 
     /// `samples.size()` and `output.size()` must both equal the
     /// `blockSize` passed to the constructor — see Corrector::process's
@@ -84,17 +67,6 @@ private:
     float correctionAmount = correctionAmountMax;
     float retuneSpeedMs = retuneSpeedMsMin;
     float previousAppliedShift = 0.0f;
-
-    // True until setGrainWidthMultiplier() is called manually (see that
-    // method's doc). While true, process() calls
-    // chooseGrainWidthMultiplierForShift() every block, per the real,
-    // measured fix in docs/FINDINGS.md #26 — the +12 semitone artifact-
-    // energy breakdown chooseGrainWidthMultiplierForShift() exists to
-    // correct. This is what actually makes the fix audible, not just
-    // measured: without it, the formula only ever ran inside
-    // QualityMetricsTests.cpp/QualityMetricsProbe.cpp, never in the live
-    // audio path.
-    bool autoGrainWidth = true;
 };
 
 } // namespace pitchzazz

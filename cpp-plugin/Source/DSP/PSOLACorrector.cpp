@@ -49,16 +49,6 @@ CorrectionResult PSOLACorrector::process (const std::vector<float>& samples, dou
     const float appliedShift = glideTowards (previousAppliedShift, targetShift, retuneSpeedMs, blockPeriodMs);
     previousAppliedShift = appliedShift;
 
-    // The measured, verified fix for the +12 semitone artifact-energy
-    // breakdown (docs/FINDINGS.md #26) — only takes effect until a
-    // caller manually calls setGrainWidthMultiplier() (see that method's
-    // doc). Applied every block rather than only above some shift
-    // threshold: chooseGrainWidthMultiplierForShift() already returns
-    // 1.0 (a no-op) for shiftRatio <= 1, so this is safe to call
-    // unconditionally rather than needing its own gate here too.
-    if (autoGrainWidth)
-        shifter.setGrainWidthMultiplier (chooseGrainWidthMultiplierForShift (appliedShift));
-
     const auto shiftStart = std::chrono::steady_clock::now();
     shifter.shiftPitch (pitch.frequencyHz, appliedShift, samples, output);
     result.timings.shiftUs = microsSince (shiftStart);
