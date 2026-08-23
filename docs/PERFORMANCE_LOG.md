@@ -1351,3 +1351,67 @@ discontinuity visible to any check built so far. `PSOLAWaveformDump.cpp`'s
 new shift-change test case is a permanent addition (`[shift-change]` tag),
 not a one-off script — the question "does X recur during normal use, not
 just at cold start" is worth being able to re-ask cheaply later.
+
+## 2026-08-23 — Three more hypotheses tested and ruled out: detectedHz variation, phase-sign reversal, harmonic content
+
+Instructed to keep testing until something is found. Three more, in
+order of how promising each looked going in.
+
+**Per-block `detectedHz` variation (real pipeline) — ruled out.** Every
+prior render in this investigation fed a *fixed* `detectedHz` into
+`shiftPitch()`, even the "jittered" ones — unrealistic, since
+`PSOLACorrector::process()` calls `detector.detect()` fresh every block
+and feeds that straight through. `PSOLARealPipelineProbe.cpp` runs the
+actual `PSOLACorrector` class (not a hand-rolled approximation) on
+jittered voice, block by block. Confirmed `detectedHz` genuinely varies
+(3.6Hz spread at 2% jitter, 10Hz at 5%) — real, previously-untested
+variation in `periodSamples`, the single most load-bearing piece of
+state in `placeGrainAt()`. Zero jumps above threshold at either jitter
+depth regardless.
+
+**Phase-sign reversal (curvature outliers) — ruled out.** A sine crosses
+any given amplitude twice per cycle, once rising once falling — a splice
+can have near-zero `|delta|` while still reversing direction, which a
+raw jump-magnitude scan can't see at all. Added a deviation-from-linear-
+extrapolation check (predicts `out[i]` from `out[i-2], out[i-1]`,
+compares to actual) specifically to catch this. Found nothing beyond the
+same already-identified startup-transient sample, on both the fixed-shift
+and real-pipeline renders.
+
+**Harmonic content — initially looked like a major finding, fully
+explained away by controls.** Every render so far used a pure sine, which
+structurally cannot expose harmonic-phase-coherence artifacts (the
+"buzzy"/"phasy" character real complaints are often actually about).
+Built a 5-harmonic jittered tone (`PSOLAHarmonicProbe.cpp`) and got a
+dramatic-looking result on the first pass: 3110-3475 jumps >0.045 (vs.
+0-7 for pure sine), THD+N 68-73% (vs. ~1-2%), artifact energy 28% (vs.
+~1%). **Before reporting this as a finding, added the controls the
+result needed**: QualityMetrics on the *raw, unprocessed* input alone
+(no shifting at all) measured THD+N 70.98%, artifact energy 29.09% —
+matching every processed variant. Unison PSOLA and the phase vocoder at
+the same shifts measured the same ~26-29% band. Root cause: this
+jittered multi-harmonic signal's own FM sidebands (each harmonic spreads
+proportionally more in absolute Hz than the fundamental, for the same
+percentage jitter) get counted as "artifact energy" by a metric built
+for stationary harmonics — nothing to do with either shifting engine.
+Same story for the jump count: the raw input alone has 3441 jumps >0.045,
+because a 5-harmonic sum has a genuinely higher natural derivative
+(measured max 0.0699) than the pure-sine threshold this test reused
+without recalibrating. Re-ran at a properly calibrated threshold (0.15,
+>2x the signal's own measured natural max): 0 jumps in raw input at
+either shift, and PSOLA output showed nothing beyond the same familiar
+startup-transient sample. Ruled out, cleanly, once tested properly rather
+than on the first (uncontrolled) pass.
+
+**Running total: seven independent hypotheses now ruled out** for the
+realistic +-1st range — clipping, dropouts, bucket-transition-correlated
+jumps, shift-change transients, per-block detectedHz variation,
+phase-sign reversal, and harmonic content. None explain "almost always
+present." 89/89 tests pass. Remaining untested avenues, roughly in order
+of promise: a genuine spectral/sideband analysis for the original
+low-frequency-beat theory (the "right tool" flagged two entries ago,
+still not built); `PitchDetector`'s own measurement stability
+independent of PSOLA entirely; and, at this point, real recorded voice
+through the actual Standalone build rather than another synthetic
+signal, since synthetic-signal testing has now been pushed across seven
+genuinely different angles without finding anything.
