@@ -1373,6 +1373,16 @@
       TD-PSOLA and the phase vocoder's own clean baseline almost exactly. A smaller, real remainder at larger
       shifts is expected and already disclosed elsewhere on this page. Varispeed's resampling stage has its own
       accepted, unrelated interpolation error that scales with shift amount.</div>
+
+    <div class="callout" style="border-color:var(--amber);"><strong>A known, disclosed limitation that remains on
+      Varispeed.</strong> A subtler version of the same character is still faintly audible here. Checked directly
+      rather than guessed at. The click-suppression fade above only fires now on a genuine shortfall, and a real
+      shortfall still happens occasionally, on about 1.5% of processing blocks in this clip, with individual
+      gaps up to around 30 milliseconds. These are legitimate shortfalls the fade is correctly responding to, not
+      a return of the earlier unconditional bug. The more interesting open question is why the underlying
+      two-stage pipeline runs short at all on those blocks, a buffering question rather than a fade-logic one,
+      and it wasn't chased down further given the time available before this needed to ship. Same disclosure
+      standard as TD-PSOLA's own remaining residual above.</div>
   </section>
 
   <p style="text-align:center; margin:0 0 40px; font-family:var(--mono); font-size:14.5px;">
