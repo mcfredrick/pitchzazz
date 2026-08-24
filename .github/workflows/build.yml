@@ -236,6 +236,28 @@ jobs:
       - name: Cache build (sccache)
         uses: mozilla-actions/sccache-action@v0.0.9
 
+      # ilammy/msvc-dev-cmd (above) correctly sets up cl.exe (CMake found
+      # it fine), but Git for Windows also ships its own usr/bin/link.exe
+      # (a coreutils hardlink utility, not a linker), and by the time
+      # Cargo's own build-script linking runs — from inside a bash step,
+      # several steps and one choco install later — that shadows MSVC's
+      # real link.exe: confirmed by a real failing run whose linker
+      # invocation resolved to "C:\Program Files\Git\usr\bin\link.exe"
+      # ("extra operand", exit code 1) despite the toolchain otherwise
+      # being set up correctly. $GITHUB_PATH prepends are the one PATH
+      # mechanism guaranteed to apply to every later step regardless of
+      # which shell invokes it, so it beats trying to out-guess exactly
+      # where msvc-dev-cmd's own PATH edit loses priority.
+      - name: Prioritize MSVC link.exe over Git's usr/bin/link.exe (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          if [ -n "$VCToolsInstallDir" ]; then
+            echo "${VCToolsInstallDir}bin/Hostx64/x64" >> "$GITHUB_PATH"
+          else
+            echo "VCToolsInstallDir not set by msvc-dev-cmd — cannot prioritize link.exe" >&2
+            exit 1
+          fi
+
       - name: Load .env
         run: |
           ENV_FILE=".env"
