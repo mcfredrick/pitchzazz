@@ -415,10 +415,23 @@ class SpectrumComponent : public juce::Component,
                            private juce::Timer
 {
 public:
+    /// `detectedHzSourceIn`/`semitoneShiftSourceIn` are optional (default to
+    /// nothing wired up) so existing call sites keep compiling; when both
+    /// are supplied, the same detected/corrected relationship
+    /// PluginEditor.cpp's LCD readouts and ScaleKeyboardComponent use
+    /// (`detectedHz * 2^(semitoneShift/12)`) is computed here too, and
+    /// drawn as a vertical marker on the row that pitch actually belongs
+    /// to: detected on BEFORE, corrected on AFTER -- matching this class's
+    /// own before/after split rather than duplicating both markers on both
+    /// rows.
     explicit SpectrumComponent (std::function<const ScopeCapture*()> captureSourceIn,
-                                 std::function<double()> sampleRateSourceIn)
+                                 std::function<double()> sampleRateSourceIn,
+                                 std::function<float()> detectedHzSourceIn = {},
+                                 std::function<float()> semitoneShiftSourceIn = {})
         : captureSource (std::move (captureSourceIn)),
           sampleRateSource (std::move (sampleRateSourceIn)),
+          detectedHzSource (std::move (detectedHzSourceIn)),
+          semitoneShiftSource (std::move (semitoneShiftSourceIn)),
           fft (fftOrder),
           window (fftSize, juce::dsp::WindowingFunction<float>::hann)
     {
@@ -457,8 +470,8 @@ public:
         auto inner = bounds.reduced (6.0f);
 
         // A frequency-axis tick strip along the bottom, shared by both
-        // rows (one x-axis, since both cover the same 0..maxDisplayHz
-        // range) -- this plus the filled-area fill below are this
+        // rows (one x-axis, since both cover the same minDisplayHz..
+        // maxDisplayHz log-scale range) -- this plus the filled-area fill below are this
         // component's two biggest visual differences from ScopeComponent's
         // line-only traces: without them the two panels read as near-
         // identical stacked line charts, easy to confuse at a glance
@@ -481,8 +494,22 @@ public:
         const double hzPerBin = sampleRate / (double) fftSize;
         const int binsToShow = juce::jlimit (1, fftSize / 2, (int) (maxDisplayHz / hzPerBin));
 
+        // log10, not linear -- matches how every real spectrum analyzer
+        // (Pro-Q etc.) lays out its frequency axis, and for a reason beyond
+        // convention: ear and musical pitch are both roughly logarithmic in
+        // frequency, so a linear axis crushes the entire vocal fundamental
+        // and low-harmonic range most relevant to this plugin into a sliver
+        // on the left while burning most of the width on the sparse top end.
+        const auto hzToX = [] (float hz, juce::Rectangle<float> rect)
+        {
+            const float t = (std::log10 (hz) - std::log10 (minDisplayHz))
+                             / (std::log10 (maxDisplayHz) - std::log10 (minDisplayHz));
+            return rect.getX() + juce::jlimit (0.0f, 1.0f, t) * rect.getWidth();
+        };
+
         const auto drawRow = [&] (juce::Rectangle<float> row, const juce::String& label,
-                                   const std::array<float, fftSize / 2>& magnitudesDb, juce::Colour colour)
+                                   const std::array<float, fftSize / 2>& magnitudesDb, juce::Colour colour,
+                                   float markerHz, juce::Colour markerColour)
         {
             g.setColour (colour.withAlpha (0.85f));
             g.setFont (juce::Font (9.5f, juce::Font::bold));
@@ -498,20 +525,28 @@ public:
                 return row.getBottom() - t * row.getHeight();
             };
 
-            // Faint vertical gridlines at each 1kHz mark -- reinforces the
-            // frequency axis even without repeating tick labels on every
-            // row (only the bottom axisStrip below carries the numbers).
+            // Faint vertical gridlines at standard log-scale decade/half-decade
+            // marks -- reinforces the frequency axis even without repeating
+            // tick labels on every row (only the bottom axisStrip below
+            // carries the numbers).
             g.setColour (juce::Colour (0xff2c3140));
-            for (float hz = 1000.0f; hz < maxDisplayHz; hz += 1000.0f)
+            for (float hz : logGridlineHz)
             {
-                const float x = row.getX() + hz / maxDisplayHz * row.getWidth();
+                if (hz <= minDisplayHz || hz >= maxDisplayHz)
+                    continue;
+                const float x = hzToX (hz, row);
                 g.drawLine (x, row.getY(), x, row.getBottom(), 1.0f);
             }
 
             juce::Path line;
             for (int bin = 0; bin < binsToShow; ++bin)
             {
-                const float x = row.getX() + (float) bin / (float) (binsToShow - 1) * row.getWidth();
+                // Bin 0 is DC (0Hz), which has no position on a log axis --
+                // clamped up to minDisplayHz like every other sub-minDisplayHz
+                // bin, so the low end of the trace piles up at the left edge
+                // instead of being undefined.
+                const float hz = juce::jmax ((float) bin * (float) hzPerBin, minDisplayHz);
+                const float x = hzToX (hz, row);
                 const float y = dbToY (magnitudesDb[(size_t) bin]);
                 if (bin == 0)
                     line.startNewSubPath (x, y);
@@ -534,17 +569,42 @@ public:
 
             g.setColour (colour.withAlpha (0.95f));
             g.strokePath (line, juce::PathStrokeType (1.2f));
+
+            // Source/destination pitch marker -- a vertical line at the
+            // exact frequency plus a small downward-pointing triangle at
+            // the top, deliberately a different shape from the filled
+            // trace below it so it doesn't read as just another spectral
+            // peak. Only drawn when voiced and within the displayed
+            // range; markerHz <= 0 is this lambda's "nothing to mark"
+            // signal, since 0Hz/negative isn't a real pitch.
+            if (voiced && markerHz > 0.0f)
+            {
+                const float x = hzToX (markerHz, row);
+                g.setColour (markerColour.withAlpha (0.8f));
+                g.drawLine (x, row.getY(), x, row.getBottom(), 1.2f);
+
+                g.setColour (markerColour);
+                constexpr float triHalf = 3.0f;
+                juce::Path triangle;
+                triangle.addTriangle (x - triHalf, row.getY(), x + triHalf, row.getY(), x, row.getY() + 5.0f);
+                g.fillPath (triangle);
+            }
         };
 
-        drawRow (inputRow, "BEFORE", inputMagnitudesDb, juce::Colour (0xff8a8d9c));
-        drawRow (outputRow, "AFTER", outputMagnitudesDb, accentColour);
+        drawRow (inputRow, "BEFORE", inputMagnitudesDb, juce::Colour (0xff8a8d9c),
+                 detectedHz, juce::Colour (colours::accentCyan));
+        drawRow (outputRow, "AFTER", outputMagnitudesDb, accentColour,
+                 correctedHz, juce::Colour (colours::accentGreen));
 
         g.setColour (juce::Colour (0xff8a8d9c).withAlpha (0.7f));
         g.setFont (juce::Font (8.5f));
-        for (float hz = 0.0f; hz <= maxDisplayHz + 1.0f; hz += 1000.0f)
+        for (float hz : logGridlineHz)
         {
-            const float x = axisStrip.getX() + hz / maxDisplayHz * axisStrip.getWidth();
-            const juce::String tickLabel = hz >= 1000.0f ? juce::String ((int) (hz / 1000.0f)) + "k" : "0";
+            if (hz < minDisplayHz || hz > maxDisplayHz)
+                continue;
+            const float x = hzToX (hz, axisStrip);
+            const juce::String tickLabel = hz >= 1000.0f ? juce::String ((int) (hz / 1000.0f)) + "k"
+                                                           : juce::String ((int) hz);
             g.drawText (tickLabel, juce::Rectangle<float> (x - 16.0f, axisStrip.getY(), 32.0f, axisStrip.getHeight()).toNearestInt(),
                         juce::Justification::centred);
         }
@@ -558,7 +618,19 @@ private:
     static constexpr int fftOrder = 10;
     static constexpr int fftSize = 1 << fftOrder; // 1024 -- see computeMagnitudeDb's doc for why this exceeds captureLength
     static constexpr float maxDisplayHz = 5000.0f;
+    // 20Hz, not 0 -- log10(0) is undefined, and 20Hz is the conventional
+    // bottom of a log frequency axis (roughly the low end of audibility)
+    // anyway, so nothing musically relevant is cropped by starting here.
+    static constexpr float minDisplayHz = 20.0f;
     static constexpr float dbFloor = -80.0f;
+
+    // Standard 1-2-5 log-axis tick set, same convention Pro-Q and every
+    // other spectrum analyzer uses -- filtered to [minDisplayHz, maxDisplayHz]
+    // at each use site since this list intentionally reaches past this
+    // component's current 5kHz cap in case that cap changes later.
+    static constexpr std::array<float, 10> logGridlineHz {
+        20.0f, 50.0f, 100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f, 5000.0f, 10000.0f, 20000.0f
+    };
 
     void timerCallback() override
     {
@@ -568,6 +640,15 @@ private:
         const ScopeCapture* capture = captureSource ? captureSource() : nullptr;
         if (capture == nullptr)
             return;
+
+        // Same detected/corrected relationship PluginEditor.cpp's LCD
+        // readouts and ScaleKeyboardComponent compute -- see this class's
+        // constructor doc for why it's re-derived here rather than shared.
+        detectedHz = detectedHzSource ? detectedHzSource() : 0.0f;
+        voiced = detectedHz > 0.0f;
+        correctedHz = voiced
+            ? detectedHz * std::pow (2.0f, (semitoneShiftSource ? semitoneShiftSource() : 0.0f) / 12.0f)
+            : 0.0f;
 
         std::array<float, ScopeCapture::captureLength> in {}, out {};
         int n = 0;
@@ -609,11 +690,16 @@ private:
 
     std::function<const ScopeCapture*()> captureSource;
     std::function<double()> sampleRateSource;
+    std::function<float()> detectedHzSource;
+    std::function<float()> semitoneShiftSource;
     juce::dsp::FFT fft;
     juce::dsp::WindowingFunction<float> window;
 
     bool frozen = false;
     bool hasData = false;
+    bool voiced = false;
+    float detectedHz = 0.0f;
+    float correctedHz = 0.0f;
     std::array<float, fftSize / 2> inputMagnitudesDb {};
     std::array<float, fftSize / 2> outputMagnitudesDb {};
     juce::Colour accentColour = juce::Colours::lightgreen;

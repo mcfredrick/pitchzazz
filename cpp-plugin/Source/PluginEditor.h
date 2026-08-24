@@ -186,8 +186,15 @@ private:
     // miss). Reads the same ScopeCapture independently rather than sharing
     // scopeComponent's snapshot, since each component owns its own 30Hz
     // Timer (ScopeComponent's doc explains why not the editor's shared one).
+    // The trailing detected-Hz/semitone-shift callbacks (added alongside
+    // scaleKeyboard's source/target marker) draw the same detected
+    // (source) and corrected (destination) pitch as a marker on the
+    // BEFORE/AFTER rows respectively -- see SpectrumComponent's
+    // constructor doc.
     pitchzazz::SpectrumComponent spectrumComponent { [this] { return processorRef.getScopeCapture(); },
-                                                      [this] { return processorRef.getSampleRate(); } };
+                                                      [this] { return processorRef.getSampleRate(); },
+                                                      [this] { return processorRef.getLastDetectedHz(); },
+                                                      [this] { return processorRef.getLastSemitoneShift(); } };
 
     // Pauses both scopeComponent and spectrumComponent together -- an
     // artifact worth a closer look scrolls off in under 100ms at 30Hz, so
