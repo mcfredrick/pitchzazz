@@ -49,7 +49,7 @@ namespace
             int produced = 0;
             do
             {
-                produced = stretcher.pull (ratio, out, chunk * 4);
+                produced = stretcher.pull (ratio, ratio, out, chunk * 4);
                 allOutput.insert (allOutput.end(), out, out + produced);
             } while (produced > 0);
         }
@@ -63,7 +63,7 @@ namespace
         int produced = 0;
         do
         {
-            produced = stretcher.pull (ratio, out, chunk * 4);
+            produced = stretcher.pull (ratio, ratio, out, chunk * 4);
             allOutput.insert (allOutput.end(), out, out + produced);
         } while (produced > 0);
 
@@ -127,7 +127,7 @@ TEST_CASE ("pull returns nothing until a full window plus search margin is avail
     stretcher.push (block.data(), (int) block.size());
 
     float out[256];
-    const int produced = stretcher.pull (1.0f, out, 256);
+    const int produced = stretcher.pull (1.0f, 1.0f, out, 256);
     CHECK (produced == 0);
 }
 
@@ -150,7 +150,7 @@ TEST_CASE ("getLatencySamples scales with sample rate, not with ratio", "[wsola-
     std::vector<float> junk (8192, 0.0f);
     at44k.push (junk.data(), (int) junk.size());
     float out[64];
-    at44k.pull (2.0f, out, 64);
-    at44k.pull (0.5f, out, 64);
+    at44k.pull (2.0f, 2.0f, out, 64);
+    at44k.pull (0.5f, 0.5f, out, 64);
     CHECK (at44k.getLatencySamples() == before);
 }

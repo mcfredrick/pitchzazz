@@ -91,6 +91,23 @@ private:
     // clamped to a musically-motivated range.
     static constexpr float outputGainRampMs = 3.0f;
     float outputGain = 0.0f;
+
+    // Interpolation state for the block-rate artifact fix (docs/FINDINGS.md):
+    // both owned stages consumed a single ratio value held constant for an
+    // entire shiftPitch() call, causing a genuine step in read/analysis
+    // rate at every block boundary -- confirmed as this engine's dominant
+    // artifact by a causal block-size sweep (the artifact's measured
+    // frequency moved to the exactly-predicted new value at three
+    // different block sizes). currentShift is the value shiftPitch()
+    // reached by the end of its most recent call, the interpolation start
+    // point for the next one, mirroring PSOLAPitchShifter's own
+    // currentShift/hasReceivedFirstCall pair (docs/FINDINGS.md's PSOLA
+    // follow-up) including the same first-call special case: there's
+    // nothing real to interpolate from before any audio has been
+    // processed, so the first call skips interpolation and starts already
+    // at target.
+    float currentShift = 0.0f;
+    bool hasReceivedFirstCall = false;
 };
 
 } // namespace pitchzazz

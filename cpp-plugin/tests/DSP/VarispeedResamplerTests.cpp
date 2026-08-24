@@ -46,7 +46,7 @@ TEST_CASE ("ratio 1.0 reproduces the input exactly", "[varispeed-resampler]")
     resampler.push (input.data(), (int) input.size());
 
     std::vector<float> output (input.size(), 0.0f);
-    const int produced = resampler.pull (1.0f, output.data(), (int) output.size());
+    const int produced = resampler.pull (1.0f, 1.0f, output.data(), (int) output.size());
 
     REQUIRE (produced == (int) input.size() - 2);
     for (int i = 0; i < produced; ++i)
@@ -62,7 +62,7 @@ TEST_CASE ("ratio 2.0 shifts the detected frequency up by an octave", "[varispee
     resampler.push (input.data(), (int) input.size());
 
     std::vector<float> output (input.size(), 0.0f);
-    const int produced = resampler.pull (2.0f, output.data(), (int) output.size());
+    const int produced = resampler.pull (2.0f, 2.0f, output.data(), (int) output.size());
     output.resize ((size_t) produced);
 
     const float detected = detectFrequency (output);
@@ -78,7 +78,7 @@ TEST_CASE ("ratio 0.5 shifts the detected frequency down an octave", "[varispeed
     resampler.push (input.data(), (int) input.size());
 
     std::vector<float> output (input.size(), 0.0f);
-    const int produced = resampler.pull (0.5f, output.data(), (int) output.size());
+    const int produced = resampler.pull (0.5f, 0.5f, output.data(), (int) output.size());
     output.resize ((size_t) produced);
 
     const float detected = detectFrequency (output);
@@ -98,7 +98,7 @@ TEST_CASE ("pull returns fewer samples than requested when input runs out", "[va
     // pushed — this is the class's whole contract for how a caller knows
     // to push more before pulling again.
     std::vector<float> output (64, 0.0f);
-    const int produced = resampler.pull (1.0f, output.data(), (int) output.size());
+    const int produced = resampler.pull (1.0f, 1.0f, output.data(), (int) output.size());
 
     CHECK (produced < (int) output.size());
     CHECK (produced <= (int) input.size());
@@ -126,7 +126,7 @@ TEST_CASE ("push/pull remains correct across history-buffer wraparound", "[varis
         allInput.insert (allInput.end(), block.begin(), block.end());
 
         std::vector<float> out (blockSize, 0.0f);
-        const int produced = resampler.pull (1.0f, out.data(), blockSize);
+        const int produced = resampler.pull (1.0f, 1.0f, out.data(), blockSize);
         allOutput.insert (allOutput.end(), out.begin(), out.begin() + produced);
     }
 

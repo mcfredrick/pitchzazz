@@ -348,3 +348,60 @@ wide-range data all stay: a real, characterized property of the
 algorithm, and a ready answer if a future feature (`docs/ROADMAP.md`'s
 MIDI-controlled "vocoder mode," which *would* request arbitrary large
 intervals) ever needs it. `docs/FINDINGS.md` #27 has the full account.
+
+## Real-voice instrumentation, not another synthetic-tone metric — findings #31/#32
+
+Every technique above targets a question a synthetic tone can answer.
+The shared pitch-detector harmonic-lock (finding #31) and TD-PSOLA's
+numerical-instability read-position bug (finding #32) are both real-voice
+phenomena that no synthetic-tone test in this project, including four
+earlier attempts specifically aimed at the same audible symptom, ever
+caught. Two new tools and one new technique, all used against the actual
+G-major demo vocal rather than a generated tone:
+
+- **`benchmarks/PitchDetectorOctaveProbe.cpp`** — runs only the shared
+  `PitchDetector`, block by block at the real pipeline's block size,
+  against a real vocal file, and prints `detectedHz`/clarity per block.
+  Confirmed finding #31 directly: an isolated event where a stable
+  ~333Hz note flips to ~667Hz for a few blocks, each flip at markedly
+  lower clarity (0.10-0.21) than the surrounding correct reads (0.90+).
+- **The block-size causal sweep** (`RenderDemoAudio.cpp`'s
+  `PITCHZAZZ_DEMO_BLOCKSIZE` override) — re-renders the same clip at a
+  different processing block size and checks whether a suspected
+  block-rate artifact's frequency moves to the exactly-predicted new
+  value. A correlation ("this frequency showed up") is cheap to
+  manufacture by accident; a causal hit at three different block sizes
+  in a row isn't. This is what separated a real periodic artifact (which
+  turned out to matter far more for Varispeed) from a false lead for
+  TD-PSOLA specifically.
+- **Direct internal-state tracing on real content** — a temporary,
+  env-var-gated trace added to `placeGrainAt`'s read-bucket computation
+  (reverted after use, never shipped), run against the real vocal file,
+  comparing the delta between consecutive grains' chosen read position.
+  This is what found finding #32's actual mechanism: read-position jumps
+  of tens to hundreds of periods, recurring roughly 24 times a second,
+  invisible to every prior synthetic-tone attempt because a synthetic
+  tone's period barely drifts block to block the way a real detector's
+  estimate does on real voice.
+
+One methodology trap worth recording alongside the tools: verifying
+finding #31's fix by re-running pitch detection on the corrected
+*output* audio looked like a failure (still found a doubled reading in
+the same window) but was actually a confound — re-detecting pitch on
+already-shifted audio re-runs the same fallible detector on a different
+signal, which can independently trip the same harmonic-lock quirk on
+that new waveform's own harmonic balance. The fix was to trace what the
+correction pipeline's own internal `CorrectionResult` actually used
+block by block, not to re-guess at it from the output a second time.
+`docs/FINDINGS.md` #31 and #32 have the full accounts.
+
+The same block-size causal sweep, applied to Varispeed next (finding #33)
+now that its exact predicted-frequency-shift behavior was already
+established as trustworthy, found and helped fix two further real bugs in
+`VarispeedShifter::shiftPitch()` — one an analogous block-constant-ratio
+step in both owned stages, the other an unconditional per-block gain dip
+in the click-suppression fade-out logic. The sweep's before/after use here
+is the clean, decisive case: no measurable frequency shift at any of three
+tested block sizes after the fix, the exact inverse of the sweep that
+originally confirmed the bug existed. `docs/FINDINGS.md` #33 has the full
+account.

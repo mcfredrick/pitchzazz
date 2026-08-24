@@ -59,17 +59,24 @@ public:
     void push (const float* input, int count);
 
     /// Produces up to `maxCount` resampled samples into `output`,
-    /// advancing the internal fractional read position by `ratio` per
-    /// output sample (`ratio` > 1 reads the input faster — pitch/speed up;
-    /// < 1 reads it slower — pitch/speed down). Returns the actual number
-    /// of samples produced, which is less than `maxCount` whenever the
-    /// next output sample would need an input sample not yet pushed —
-    /// the caller (VarispeedShifter) is expected to call push() again and
-    /// retry rather than this class blocking or padding with silence
-    /// itself, matching this codebase's standing rule that only the
-    /// real-time audio callback's own underrun handling gets to decide
-    /// what "not enough data yet" means.
-    int pull (float ratio, float* output, int maxCount);
+    /// advancing the internal fractional read position by a per-sample
+    /// ratio, linearly interpolated from `ratioStart` (this call's first
+    /// output sample) to `ratioEnd` (its last) rather than held at one
+    /// constant value for the whole call (`ratio` > 1 reads the input
+    /// faster — pitch/speed up; < 1 reads it slower — pitch/speed down).
+    /// A single constant ratio per call meant the read rate took a genuine
+    /// step at every call boundary, confirmed (via a causal block-size
+    /// sweep) as this engine's dominant real-world artifact; interpolating
+    /// removes that discontinuity the same way it already does for
+    /// PSOLAPitchShifter's own shift/period ramp (docs/FINDINGS.md).
+    /// Returns the actual number of samples produced, which is less than
+    /// `maxCount` whenever the next output sample would need an input
+    /// sample not yet pushed — the caller (VarispeedShifter) is expected
+    /// to call push() again and retry rather than this class blocking or
+    /// padding with silence itself, matching this codebase's standing
+    /// rule that only the real-time audio callback's own underrun
+    /// handling gets to decide what "not enough data yet" means.
+    int pull (float ratioStart, float ratioEnd, float* output, int maxCount);
 
     /// Fixed at 2 samples — cubic Hermite needs the input sample just
     /// past the current integer read position, plus one more to fit the

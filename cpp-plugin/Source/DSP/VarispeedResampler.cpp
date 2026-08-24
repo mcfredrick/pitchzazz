@@ -42,7 +42,7 @@ void VarispeedResampler::push (const float* input, int count)
     }
 }
 
-int VarispeedResampler::pull (float ratio, float* output, int maxCount)
+int VarispeedResampler::pull (float ratioStart, float ratioEnd, float* output, int maxCount)
 {
     const auto sampleAt = [this] (long long idx) noexcept
     {
@@ -74,6 +74,14 @@ int VarispeedResampler::pull (float ratio, float* output, int maxCount)
         const auto frac = (float) (readPos - (double) idx0);
 
         output[produced] = catmullRom (y0, y1, y2, y3, frac);
+
+        // Interpolated per sample rather than held constant for the whole
+        // call -- see the header doc. `maxCount` (not `produced` at loop
+        // end) is the intended full-call length, so this ramps smoothly
+        // toward ratioEnd even if the loop breaks early on an input
+        // shortfall.
+        const float t = (float) produced / (float) std::max (1, maxCount - 1);
+        const float ratio = ratioStart + (ratioEnd - ratioStart) * t;
         readPos += (double) ratio;
     }
     return produced;

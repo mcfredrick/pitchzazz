@@ -170,17 +170,8 @@ bool WSOLATimeStretcher::placeNextWindowIfPossible (int analysisHopSamples)
     return true;
 }
 
-int WSOLATimeStretcher::pull (float ratio, float* output, int maxCount)
+int WSOLATimeStretcher::pull (float ratioStart, float ratioEnd, float* output, int maxCount)
 {
-    // ratio > 1 must mean "output longer than input" (stretch): for a
-    // fixed amount of pushed input, that means consuming it *slower*
-    // than the fixed synthesis-domain hop, i.e. analysisHop shrinks as
-    // ratio grows — division, not multiplication. (Confirmed by an
-    // inverted first attempt here: multiplying produced the opposite of
-    // the documented contract, caught by
-    // WSOLATimeStretcherTests.cpp's duration-ratio tests.)
-    const int analysisHopSamples = std::max (1, (int) std::lround ((double) synthesisHopSamples / (double) ratio));
-
     int produced = 0;
     while (produced < maxCount)
     {
@@ -195,6 +186,18 @@ int WSOLATimeStretcher::pull (float ratio, float* output, int maxCount)
         }
         if (produced >= maxCount)
             break;
+
+        // Interpolated per window placed, not held constant for the whole
+        // call -- see the header doc. ratio > 1 must mean "output longer
+        // than input" (stretch): for a fixed amount of pushed input, that
+        // means consuming it *slower* than the fixed synthesis-domain
+        // hop, i.e. analysisHop shrinks as ratio grows — division, not
+        // multiplication. (Confirmed by an inverted first attempt here:
+        // multiplying produced the opposite of the documented contract,
+        // caught by WSOLATimeStretcherTests.cpp's duration-ratio tests.)
+        const float t = (float) produced / (float) std::max (1, maxCount - 1);
+        const float ratio = ratioStart + (ratioEnd - ratioStart) * t;
+        const int analysisHopSamples = std::max (1, (int) std::lround ((double) synthesisHopSamples / (double) ratio));
         if (! placeNextWindowIfPossible (analysisHopSamples))
             break;
     }

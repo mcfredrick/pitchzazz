@@ -128,11 +128,18 @@ public:
     /// pitch is unaffected; only duration changes. `ratio` > 1 stretches
     /// (output runs longer than the input that produced it — used here
     /// to *undo* a pitch-up resample's time compression); < 1 compresses.
+    /// Linearly interpolated from `ratioStart` to `ratioEnd` across the
+    /// call rather than held at one constant value, for the same reason
+    /// VarispeedResampler::pull() interpolates now (docs/FINDINGS.md): a
+    /// constant analysisHopSamples for a whole call meant window spacing
+    /// took a genuine step at every call boundary. Interpolated per window
+    /// placed (this class's own natural granularity), using how much of
+    /// `maxCount` has been produced so far as the progress fraction.
     /// Returns the actual number of samples produced, which is less than
     /// `maxCount` whenever producing more would need an analysis window
     /// that reaches past what's been pushed so far — same "caller pushes
     /// more and retries" contract as VarispeedResampler::pull().
-    int pull (float ratio, float* output, int maxCount);
+    int pull (float ratioStart, float ratioEnd, float* output, int maxCount);
 
     /// Fixed at windowSizeSamples + searchRadiusSamples — both are
     /// sampleRate-derived constants, not ratio-dependent, which is the

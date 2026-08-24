@@ -214,34 +214,45 @@ TEST_CASE ("PSOLA: chooseGrainWidthMultiplierForShift does not regress badly at 
     CHECK (after.artifactEnergyPercent < before.artifactEnergyPercent + 1.0f);
 }
 
-TEST_CASE ("Varispeed carries real, measurable baseline artifact energy that the other two engines don't", "[quality]")
+TEST_CASE ("Varispeed's unison baseline now matches the other two engines", "[quality]")
 {
-    // Confirms with a real number what VarispeedResampler.h's own class
-    // doc already states as a documented-but-unmeasured limitation ("an
-    // extreme up-shift could alias harshly... not tuned against by ear
-    // yet, flagged here rather than assumed"): unlike the phase vocoder
-    // and PSOLA (both under ~1% even at unison), Varispeed's
-    // cubic-Hermite resampler carries substantial artifact energy even
-    // at *zero* shift (measured ~22.3%) — its own per-call anticipatory
-    // click-suppression gain ramp (VarispeedShifter::shiftPitch's
-    // fade-out/fade-in) likely contributes to this baseline, on top of
-    // the resampler's own interpolation error; this test doesn't attempt
-    // to separate those two sources, only to confirm the total is real
-    // and consistently larger than the other engines', which is what
-    // actually matters for an engine-selection/quality comparison.
+    // Previously asserted the opposite (Varispeed carrying real, ~22%
+    // baseline artifact energy the other two engines didn't) — this test's
+    // own original comment already suspected why: "its own per-call
+    // anticipatory click-suppression gain ramp... likely contributes to
+    // this baseline." That suspicion turned out to be correct and is now
+    // fixed: VarispeedShifter::shiftPitch()'s fade-out logic computed its
+    // fade window unconditionally, so in ordinary healthy operation
+    // (produced == requested every call, true almost always once the
+    // pipeline is past its initial latency fill) it silently faded the
+    // last ~128 samples of *every block* toward silence regardless of
+    // whether there was ever a real shortfall to anticipate — an
+    // unconditional, periodic amplitude dip at the block rate. Found via
+    // the same block-rate/envelope-domain evidence trail as the TD-PSOLA
+    // fix (docs/FINDINGS.md); confirmed independently here since this
+    // metric (stationary-tone spectral purity) has nothing to do with the
+    // envelope-modulation analysis that found it in the first place.
+    // Real measured, before -> after this fix: unison 22.96% -> 0.56%
+    // (now identical to PSOLA/phase vocoder's own ~0.56% baseline), -3st
+    // 23.39% -> 4.81%, -12st 24.61% -> 10.98%, +3st 28.47% -> 16.73%,
+    // +12st 30.01% -> 18.85%. Unison and small shifts (this plugin's real
+    // operating range, per finding #27) improved the most, since the
+    // gain-ramp bug's unconditional dip applied identically regardless of
+    // shift while the resampler's own genuine cubic-Hermite interpolation
+    // error (VarispeedResampler.h's own documented, accepted limitation)
+    // scales with shift and was always going to remain at larger ratios.
     const auto unison = measureVarispeed (0.0f);
-    CHECK (unison.artifactEnergyPercent > 15.0f);
-
     const auto phaseVocoderUnison = measurePhaseVocoder (0.0f);
     const auto psolaUnison = measurePsola (0.0f);
-    CHECK (unison.artifactEnergyPercent > phaseVocoderUnison.artifactEnergyPercent * 5.0f);
-    CHECK (unison.artifactEnergyPercent > psolaUnison.artifactEnergyPercent * 5.0f);
+    CHECK (unison.artifactEnergyPercent < 2.0f);
+    CHECK (unison.artifactEnergyPercent < phaseVocoderUnison.artifactEnergyPercent * 5.0f);
+    CHECK (unison.artifactEnergyPercent < psolaUnison.artifactEnergyPercent * 5.0f);
 
-    // Real measured: 22.96% at unison -> 30.01% at +12 semitones, a
-    // ~30% relative increase — comfortable margin above measurement
-    // noise, unlike the -12 direction (23.57% vs. 22.96% unison, too
-    // thin a gap to assert reliably), which is why only the upward
-    // direction is asserted here.
+    // A real, smaller, accepted-as-is remainder at larger shifts (the
+    // resampler's own interpolation error) — loose bounds with real
+    // margin, not precision claims, same convention as every other
+    // threshold in this file.
     const auto upOctave = measureVarispeed (12.0f);
-    CHECK (upOctave.artifactEnergyPercent > unison.artifactEnergyPercent * 1.15f);
+    CHECK (upOctave.artifactEnergyPercent < 25.0f);
+    CHECK (upOctave.artifactEnergyPercent > unison.artifactEnergyPercent);
 }
