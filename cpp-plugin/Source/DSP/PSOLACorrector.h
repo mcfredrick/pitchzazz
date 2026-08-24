@@ -67,6 +67,13 @@ private:
     float correctionAmount = correctionAmountMax;
     float retuneSpeedMs = retuneSpeedMsMin;
     float previousAppliedShift = 0.0f;
+
+    // See Corrector.h's detectedHzClarityAcceptThreshold doc
+    // (docs/FINDINGS.md #31) — held across low-confidence blocks, then
+    // fed to both the quantizer and shifter.shiftPitch()'s own
+    // detectedHz parameter, so a harmonic-lock glitch can no longer
+    // corrupt this engine's grain period the way it did before this fix.
+    float heldDetectedHz = 0.0f;
 };
 
 } // namespace pitchzazz

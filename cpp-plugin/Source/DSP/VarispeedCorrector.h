@@ -55,6 +55,10 @@ private:
     float correctionAmount = correctionAmountMax;
     float retuneSpeedMs = retuneSpeedMsMin;
     float previousAppliedShift = 0.0f;
+
+    // See Corrector.h's detectedHzClarityAcceptThreshold doc
+    // (docs/FINDINGS.md #31) — held across low-confidence blocks.
+    float heldDetectedHz = 0.0f;
 };
 
 } // namespace pitchzazz

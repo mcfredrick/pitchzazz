@@ -245,6 +245,64 @@ private:
     double nextMarkPos = 0.0; // absolute sample position of the next synthesis mark
     double periodSamples;     // current smoothed period estimate, in samples
 
+    // The shift value shiftPitch() actually reaches by the *end* of its
+    // most recent call -- the interpolation start point for the next
+    // call, so semitoneShift ramps smoothly across each block instead of
+    // stepping at block boundaries. See docs/FINDINGS.md #32 and
+    // shiftPitch()'s own comment for why the step mattered. Starts at 0,
+    // same "no correction yet" convention this codebase's other shift-
+    // state variables (e.g. Corrector::previousAppliedShift) already use --
+    // but only ever matters as an interpolation *source* starting from the
+    // second call: hasReceivedFirstCall below skips interpolation entirely
+    // on the very first call, so this placeholder 0 is never actually
+    // ramped from.
+    float currentShift = 0.0f;
+
+    // True once shiftPitch() has been called at least once. The very first
+    // call has no real "previous state" to interpolate from — currentShift/
+    // currentPeriod are still arbitrary constructor placeholders (0 and a
+    // 150Hz-based guess), not a genuine prior block's ending value — so
+    // interpolating from them would ramp across a large, meaningless jump
+    // instead of a small, real one, exactly the kind of startup transient
+    // this fix isn't meant to introduce. shiftPitch() checks this and skips
+    // interpolation (starts already at target) on the first call only.
+    bool hasReceivedFirstCall = false;
+
+    // Same interpolation-state idea as currentShift, but for the *period*
+    // term of synthesisSpacing = period/shiftRatio -- periodSamples itself
+    // (from detectedHz) also steps once per call via updatePeriodEstimate,
+    // which independently contributes to the same block-rate discontinuity
+    // shiftAtBlockStart alone doesn't fully remove. Deliberately a
+    // separate value from the periodSamples member (halfWidth/grainWindow
+    // sizing still use the plain, un-interpolated periodSamples target;
+    // only synthesisSpacing's period term and the read-position
+    // accumulator below use this interpolated copy).
+    double currentPeriod;
+
+    // Persistent, incrementally-advanced read-position state (docs/
+    // FINDINGS.md #32's PSOLA follow-up) -- replaces computing readMarkPos
+    // fresh each grain via floor(synthesisMarkPos / periodSamples), which
+    // divides an ever-growing *absolute* sample position (approaching a
+    // million-plus samples deep into a real clip) by a divisor that steps
+    // slightly every block from ordinary detectedHz jitter. Even a <1%
+    // change in that divisor, applied to a huge numerator, produced
+    // read-position jumps of tens to hundreds of periods -- hundreds of
+    // milliseconds of audio skipped or repeated, recurring at roughly the
+    // block rate. Standard granular-synthesis/phase-accumulator fix:
+    // never divide an absolute clock by a rate: track the equivalent
+    // quantity as small, bounded per-grain increments instead.
+    // readBucketProgress accumulates *fractional original periods*
+    // covered by the most recent grain-to-grain step
+    // (synthesisSpacing/interpolatedPeriod, always a small number); each
+    // time it crosses a whole period, readMarkPosAccumulator advances by
+    // exactly one interpolatedPeriod-sized step -- reproducing the exact
+    // same discrete reuse-for-pitch-up/skip-for-pitch-down bucket pattern
+    // the original formula intended, just computed via bounded addition
+    // instead of unbounded division. Both start at 0, matching
+    // synthesisMarkPos/nextMarkPos's own starting point.
+    double readMarkPosAccumulator = 0.0;
+    double readBucketProgress = 0.0;
+
     // Recomputed once per shiftPitch() call (see updatePeriodEstimate()),
     // sized to 2*halfWidth+1 for that call's actual halfWidth. Capacity is
     // reserved once in the constructor to the worst case (2*maxHalfWidth-
@@ -258,7 +316,10 @@ private:
     int latencySamples = 0;
 
     void updatePeriodEstimate (float detectedHz) noexcept;
-    void placeGrainAt (double markPos);
+    // readMarkPos is now computed by the caller's stable accumulator
+    // (shiftPitch(), see readMarkPosAccumulator's doc) and passed in
+    // directly, rather than derived internally from synthesisMarkPos.
+    void placeGrainAt (double synthesisMarkPos, double readMarkPos);
 };
 
 } // namespace pitchzazz

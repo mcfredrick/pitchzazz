@@ -37,7 +37,14 @@ using namespace pitchzazz;
 
 namespace
 {
-    constexpr int blockSize = 2048;
+    // TEMPORARY for the finding-#31-followup block-rate-artifact causal test:
+    // overridable via PITCHZAZZ_DEMO_BLOCKSIZE so the same render can be
+    // re-run at a different block size without a rebuild-per-value edit
+    // cycle -- to be reverted back to a plain constexpr once that test is
+    // done, not left as permanent surface area.
+    const int blockSize = std::getenv ("PITCHZAZZ_DEMO_BLOCKSIZE") != nullptr
+                               ? std::atoi (std::getenv ("PITCHZAZZ_DEMO_BLOCKSIZE"))
+                               : 2048;
     constexpr int windowSizeMs = 30; // matches PluginProcessor.h's real default
     constexpr float retuneSpeedMs = 420.0f;
 
@@ -106,14 +113,29 @@ namespace
     template <typename CorrectorT>
     std::vector<float> render (CorrectorT& corrector, const std::vector<float>& input, double sampleRate)
     {
+        // Optional per-block CorrectionResult trace, gated on PITCHZAZZ_DEMO_TRACE
+        // -- prints the actual detectedHz/detectedClarity/semitoneShift the
+        // correction pipeline used for each block, straight from the real
+        // process() call, rather than re-detecting pitch on the already-
+        // shifted output (which would re-run the same fallible detector on a
+        // different signal and confound "did the fix work" with "does
+        // re-analysis independently trip the same failure mode" --
+        // docs/FINDINGS.md #31's clarity-gate verification).
+        const bool trace = std::getenv ("PITCHZAZZ_DEMO_TRACE") != nullptr;
+
         std::vector<float> output (input.size(), 0.0f);
         const int totalBlocks = (int) (input.size() / (size_t) blockSize);
         std::vector<float> inBlock ((size_t) blockSize), outBlock ((size_t) blockSize);
+        if (trace)
+            std::cout << "block,timeSec,detectedHz,detectedClarity,semitoneShift\n";
         for (int block = 0; block < totalBlocks; ++block)
         {
             const size_t offset = (size_t) block * (size_t) blockSize;
             std::copy (input.begin() + (long) offset, input.begin() + (long) (offset + (size_t) blockSize), inBlock.begin());
-            corrector.process (inBlock, sampleRate, outBlock);
+            const auto result = corrector.process (inBlock, sampleRate, outBlock);
+            if (trace)
+                std::cout << block << "," << (float) offset / (float) sampleRate << ","
+                           << result.detectedHz << "," << result.detectedClarity << "," << result.semitoneShift << "\n";
             std::copy (outBlock.begin(), outBlock.end(), output.begin() + (long) offset);
         }
         return output;

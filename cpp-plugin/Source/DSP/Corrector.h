@@ -15,6 +15,60 @@ namespace pitchzazz
 /// Inverse of hzToMidi.
 [[nodiscard]] float midiToHz (float midi) noexcept;
 
+/// Minimum NSDF clarity `Corrector`/`PSOLACorrector`/`VarispeedCorrector`
+/// each require before accepting a block's `PitchDetector::detect()`
+/// result into the correction pipeline at all — see docs/FINDINGS.md #31.
+/// The shared McLeod/NSDF detector occasionally locks onto the
+/// 2nd-harmonic NSDF peak instead of the true fundamental (a well-known
+/// autocorrelation-family failure mode); on real vocal content this
+/// showed up as an octave-doubled `detectedHz` for one to a few
+/// consecutive blocks, which (since all three correctors derive
+/// `semitoneShift` from `detectedHz` the same way) biased the applied
+/// shift by roughly an octave and produced an audible artifact on
+/// TD-PSOLA and Varispeed (the phase vocoder's heavily-overlapped
+/// frequency-domain shift smooths the same bad input into inaudibility —
+/// see finding #31's comparison — so this fix is about correctness, not
+/// just those two engines' audible symptom).
+///
+/// 0.5, not the detector's own internal `clarityThreshold` (0.1,
+/// `PitchDetector.h`) — that threshold gates "is there a pitch here at
+/// all" (silence/noise rejection), a different, lower bar than "is this
+/// specific peak trustworthy." Confirmed by measurement, not guessed: a
+/// clarity histogram across a full real vocal clip's 410 voiced blocks
+/// (`benchmarks/PitchDetectorOctaveProbe.cpp`) is sharply bimodal — 386
+/// blocks (94%) at 0.8-1.0, a legitimate softer tail of 11 blocks at
+/// 0.6-0.8, then a near-empty gap at 0.5-0.6 (1 block) before a sparse
+/// 0.1-0.5 scatter of 12 blocks that's almost entirely harmonic-lock
+/// glitches (including every block of the diagnosed octave-doubling
+/// event). 0.5 sits in that gap.
+constexpr float detectedHzClarityAcceptThreshold = 0.5f;
+
+/// A second, independent gate on accepting a block's `detectedHz`,
+/// implemented and shipped on top of `detectedHzClarityAcceptThreshold`,
+/// then reverted the same session (docs/FINDINGS.md #32's revert note) —
+/// left defined, not deleted, since the characterization itself is still
+/// real and useful if a differently-shaped fix for the same residual
+/// glitch is attempted later (same "keep the measured property, drop only
+/// the premature wiring" precedent as finding #27's grain-width formula).
+/// The motivating problem was real: a spurious ~7.5kHz reading (real
+/// content ~34x lower) slipped through the clarity gate at 0.51-0.64,
+/// just above threshold, producing an audible residual crackle even
+/// after #31 shipped. This gate rejected it correctly in isolation (a
+/// real, continuously-voiced human fundamental cannot jump 12+ semitones
+/// within a single ~46ms detection block, no matter how "confident" the
+/// detector claims to be), but a sample-level diff plus the user's own
+/// A/B listening showed that rejecting a reading doesn't just fix that
+/// one block: PSOLA's grain-read position is a stateful, path-dependent
+/// accumulator that never resyncs, so the rejection sent it down a
+/// different phase trajectory for the *rest* of the render, changing 17.5
+/// of 22 seconds of output and making the whole clip sound worse, not
+/// just those two spots better. Likely applies to Varispeed's and the
+/// phase vocoder's own stateful shifters too, not verified separately.
+/// A real fix for this residual needs to correct the reading *without*
+/// perturbing the accumulator's trajectory, which this gate's simple
+/// reject-and-hold approach doesn't do.
+constexpr float detectedHzMaxPlausibleJumpSemitones = 12.0f;
+
 /// Signed cents offset of `freqHz` from the nearest chromatic
 /// (equal-tempered) MIDI note — always in [-50, +50] by construction of
 /// nearest-integer rounding, never a display clamp. Deliberately measured
@@ -109,6 +163,13 @@ private:
     // rather than uninitialized/NaN so the very first block glides from
     // "no correction" rather than an undefined value.
     float previousAppliedShift = 0.0f;
+
+    // Last-accepted (clarity >= detectedHzClarityAcceptThreshold)
+    // detected pitch, held across low-confidence blocks — see that
+    // constant's doc (docs/FINDINGS.md #31). Starts at 0, same "no
+    // correction yet" convention previousAppliedShift's own initial value
+    // already uses.
+    float heldDetectedHz = 0.0f;
 
     // Controls the phase vocoder's STFT hop size (step = frameSize /
     // overSampling), not the analysis window itself — affects

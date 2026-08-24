@@ -19,7 +19,8 @@ float chooseGrainWidthMultiplierForShift (float semitoneShift) noexcept
 }
 
 PSOLAPitchShifter::PSOLAPitchShifter (double sampleRateIn)
-    : sampleRate (sampleRateIn), periodSamples (sampleRate / 150.0) // 150Hz: a reasonable default before any real pitch has been detected
+    : sampleRate (sampleRateIn), periodSamples (sampleRate / 150.0), // 150Hz: a reasonable default before any real pitch has been detected
+      currentPeriod (periodSamples) // same initial default, so the very first call doesn't interpolate from an artificial value
 {
     maxPeriodSamples = (int) std::ceil (sampleRate / (double) minHz);
 
@@ -74,7 +75,7 @@ void PSOLAPitchShifter::updatePeriodEstimate (float detectedHz) noexcept
     // default here.
 }
 
-void PSOLAPitchShifter::placeGrainAt (double synthesisMarkPos)
+void PSOLAPitchShifter::placeGrainAt (double synthesisMarkPos, double readMarkPos)
 {
     // Grain half-width is the *original* (unshifted) period — scaled by
     // grainWidthMultiplier, the creative control (docs/ROADMAP.md Phase
@@ -108,34 +109,26 @@ void PSOLAPitchShifter::placeGrainAt (double synthesisMarkPos)
     // source content jumps discretely every time the synthesis position
     // crosses a bucket boundary, audible on real (non-stationary) audio
     // as crackle plus a low-frequency beat — see docs/FINDINGS.md #19/#20
-    // for the full diagnosis and listening results. A cross-fade between
-    // the two nearest buckets was implemented, tested, and shipped, then
-    // found by ear (not by any automated test — three were tried and
-    // none discriminated the change) to not fix it, and reverted: two
-    // real content snapshots exactly one period apart are close but not
-    // identical for genuine voice (natural cycle-to-cycle jitter), so
-    // blending them isn't a clean cross-fade — it's closer to blending
-    // two slightly-phase-shifted copies of a similar waveform, which
-    // produces frequency-dependent cancellation (comb filtering) that
-    // sweeps as the misalignment changes, plausibly explaining why it
-    // didn't sound better and may have sounded worse. A real fix needs
+    // for the full diagnosis and listening results, and #32 for a
+    // follow-up finding that this was a much larger-magnitude effect than
+    // originally characterized (fixed at the call site, see
+    // readMarkPosAccumulator's doc in the header) — this bucket-jump
+    // limitation itself (content genuinely reused/skipped one whole
+    // period at a time) is unchanged and still a known limitation; #32
+    // fixed the *numerical instability* in how the bucket boundary was
+    // located, not this underlying reuse/skip behavior. A cross-fade
+    // between the two nearest buckets was implemented, tested, and
+    // shipped, then found by ear (not by any automated test — three were
+    // tried and none discriminated the change) to not fix it, and
+    // reverted: two real content snapshots exactly one period apart are
+    // close but not identical for genuine voice (natural cycle-to-cycle
+    // jitter), so blending them isn't a clean cross-fade — it's closer to
+    // blending two slightly-phase-shifted copies of a similar waveform,
+    // which produces frequency-dependent cancellation (comb filtering)
+    // that sweeps as the misalignment changes, plausibly explaining why
+    // it didn't sound better and may have sounded worse. A real fix needs
     // correlation-based alignment of the two candidates before blending,
     // not blending alone — bigger scope, not attempted here.
-    //
-    // The tiny epsilon before flooring matters: nextMarkPos accumulates by
-    // repeated += synthesisSpacing (shiftPitch()'s loop), and at a 1:1
-    // ratio that spacing equals periodSamples exactly, so
-    // synthesisMarkPos "should" land on an exact integer multiple of
-    // periodSamples at every mark. Floating-point rounding from repeated
-    // addition can leave it a few ULPs *below* that integer instead of
-    // exactly on it, and plain std::floor of e.g. 17.999999997 gives 17,
-    // not 18 — reading an entire extra period of stale (wrong-grain)
-    // content. Found by direct instrumentation after a latency probe
-    // showed a real but unexplained ~1-period content gap specific to
-    // certain sample-rate/frequency combinations (not all — only ones
-    // where the accumulated rounding happened to land on the wrong side
-    // of an integer boundary) — see PSOLALatencyProbe.cpp's comment.
-    const double readMarkPos = std::floor (synthesisMarkPos / periodSamples + 1.0e-6) * periodSamples;
     const long long readCenter = (long long) std::llround (readMarkPos);
     const long long writeCenter = (long long) std::llround (synthesisMarkPos);
 
@@ -161,7 +154,17 @@ void PSOLAPitchShifter::placeGrainAt (double synthesisMarkPos)
 void PSOLAPitchShifter::shiftPitch (float detectedHz, float semitoneShift,
                                      const std::vector<float>& input, std::vector<float>& output)
 {
+    // Captured before updatePeriodEstimate overwrites periodSamples with
+    // this call's target -- the interpolation start point for
+    // synthesisSpacing's period term below (see currentPeriod's doc).
     updatePeriodEstimate (detectedHz);
+
+    // First call: nothing real to interpolate from yet (see
+    // hasReceivedFirstCall's doc) -- start already at target so this call
+    // behaves exactly like the pre-interpolation formula did, rather than
+    // ramping across a large, meaningless jump from the constructor's
+    // placeholder defaults.
+    const double periodAtBlockStart = hasReceivedFirstCall ? currentPeriod : periodSamples;
 
     // Precomputed once per call (not per grain): periodSamples and
     // grainWidthMultiplier are both fixed for the whole call already
@@ -177,8 +180,20 @@ void PSOLAPitchShifter::shiftPitch (float detectedHz, float semitoneShift,
     for (int k = 0; k < (int) grainWindow.size(); ++k)
         grainWindow[(size_t) k] = 0.5f - 0.5f * std::cos (2.0f * pi * (float) k / (float) (grainWindow.size() - 1));
 
-    const double shiftRatio = std::pow (2.0, (double) semitoneShift / 12.0);
-    const double synthesisSpacing = periodSamples / shiftRatio;
+    // currentShift ramps linearly from wherever the *previous* call left it
+    // to this call's semitoneShift target over the course of this call,
+    // rather than snapping to semitoneShift as a single constant for the
+    // whole block (docs/FINDINGS.md #32). A hard per-call constant means
+    // shiftRatio (and therefore synthesisSpacing) takes a real, audible
+    // step exactly at every block boundary -- confirmed by a block-size
+    // sweep to imprint a periodic artifact at exactly the block rate
+    // (e.g. 23.4Hz at blockSize=2048/48kHz, verified moving to 11.7Hz and
+    // 46.9Hz at 4096 and 1024 respectively). Interpolating per-grain
+    // instead of holding one value for the whole call removes that
+    // discontinuity; `t` only needs mark-placement granularity (grains
+    // fire every ~one period, far more often than block boundaries), not
+    // per-sample granularity, to be smooth in practice.
+    const float shiftAtBlockStart = hasReceivedFirstCall ? currentShift : semitoneShift;
 
     for (size_t i = 0; i < input.size(); ++i)
     {
@@ -189,14 +204,58 @@ void PSOLAPitchShifter::shiftPitch (float detectedHz, float semitoneShift,
         // *this call's* actual halfWidth — not periodSamples, now that
         // grainWidthMultiplier can make those different) is entirely
         // within already-written history — this is the only place
-        // lookahead is actually spent. Still correct with placeGrainAt's
-        // floor-based read position: since the actual read position is
-        // always <= this synthesis mark's own position (floor rounds
-        // down, never up), this check is a safe — if occasionally very
-        // slightly conservative — bound on the read requirement too.
+        // lookahead is actually spent. Still correct with the read-position
+        // accumulator below: readMarkPosAccumulator only ever commits whole
+        // interpolatedPeriod-sized advances once readBucketProgress crosses
+        // 1.0, the same "round down, never up" behavior the old floor()
+        // formula had, so read position stays <= this synthesis mark's own
+        // position and this remains a safe (if occasionally slightly
+        // conservative) bound on the read requirement too.
         while (nextMarkPos + halfWidth <= (double) (totalSamplesIn - 1))
         {
-            placeGrainAt (nextMarkPos);
+            const float t = (float) i / (float) input.size();
+            const float interpolatedShift = shiftAtBlockStart + (semitoneShift - shiftAtBlockStart) * t;
+            const double shiftRatio = std::pow (2.0, (double) interpolatedShift / 12.0);
+            // Both terms of synthesisSpacing interpolated across the call --
+            // periodSamples (detectedHz-derived) steps once per call same as
+            // shiftRatio did, and independently contributes to the same
+            // block-rate artifact if left un-interpolated (docs/FINDINGS.md
+            // #32).
+            const double interpolatedPeriod = periodAtBlockStart + (periodSamples - periodAtBlockStart) * (double) t;
+            const double synthesisSpacing = interpolatedPeriod / shiftRatio;
+
+            // Stable, incremental read-position tracking (docs/FINDINGS.md
+            // #32's PSOLA follow-up; full derivation in readMarkPosAccumulator's
+            // header doc) -- replaces floor(synthesisMarkPos / periodSamples),
+            // which divided an ever-growing absolute position by a divisor
+            // that steps slightly every block. Uses *this* grain's already-
+            // current accumulator value first (matching the old formula's
+            // grain-0 behavior of reading from position 0), then advances the
+            // accumulator afterward so the *next* grain sees the update --
+            // advancing before use would put every read one full period
+            // ahead of where it should be, silently breaking the read-
+            // stays-behind-write invariant the whole latency design depends
+            // on (found the hard way: QualityMetricsTests' unison-artifact-
+            // energy checks caught it immediately when the order was
+            // reversed). readBucketProgress accumulates this grain-step's
+            // fraction of one original period (synthesisSpacing/
+            // interpolatedPeriod, always small and bounded); each whole
+            // period crossed commits exactly one interpolatedPeriod-sized
+            // advance, reproducing the same discrete reuse/skip bucket
+            // pattern the original formula intended. The tiny epsilon
+            // guards the same boundary-precision edge case finding #18
+            // already found in the old formula (a progress value that
+            // "should" be exactly 1.0 landing a few ULPs under it from
+            // repeated addition).
+            placeGrainAt (nextMarkPos, readMarkPosAccumulator);
+
+            readBucketProgress += synthesisSpacing / interpolatedPeriod;
+            while (readBucketProgress >= 1.0 - 1.0e-6)
+            {
+                readMarkPosAccumulator += interpolatedPeriod;
+                readBucketProgress -= 1.0;
+            }
+
             nextMarkPos += synthesisSpacing;
         }
 
@@ -219,6 +278,10 @@ void PSOLAPitchShifter::shiftPitch (float detectedHz, float semitoneShift,
             output[i] = 0.0f; // still within the initial latencySamples fill-up
         }
     }
+
+    currentShift = semitoneShift; // this call's target is the next call's interpolation start point
+    currentPeriod = periodSamples; // same, for the period term
+    hasReceivedFirstCall = true;
 }
 
 } // namespace pitchzazz

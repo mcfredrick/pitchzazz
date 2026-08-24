@@ -30,10 +30,18 @@ CorrectionResult VarispeedCorrector::process (const std::vector<float>& samples,
     result.timings.detectUs = microsSince (detectStart);
 
     const auto quantizeStart = std::chrono::steady_clock::now();
+
+    // See Corrector::process()'s equivalent block for the full reasoning
+    // (docs/FINDINGS.md #31). detectedHzMaxPlausibleJumpSemitones'
+    // second gate deliberately not applied here either -- see that
+    // Corrector.cpp comment for why (docs/FINDINGS.md #32's revert note).
+    if (pitch.frequencyHz > 0.0f && pitch.clarity >= detectedHzClarityAcceptThreshold)
+        heldDetectedHz = pitch.frequencyHz;
+
     float semitoneShift = 0.0f;
-    if (pitch.frequencyHz > 0.0f)
+    if (heldDetectedHz > 0.0f)
     {
-        const float currentNote = hzToMidi (pitch.frequencyHz);
+        const float currentNote = hzToMidi (heldDetectedHz);
         const int targetNote = nearestInScaleMidi ((int) std::round (currentNote), scale);
         semitoneShift = (float) targetNote - currentNote;
         if (! std::isfinite (semitoneShift))
@@ -53,7 +61,7 @@ CorrectionResult VarispeedCorrector::process (const std::vector<float>& samples,
     shifter.shiftPitch (appliedShift, samples, output);
     result.timings.shiftUs = microsSince (shiftStart);
 
-    result.detectedHz = pitch.frequencyHz;
+    result.detectedHz = heldDetectedHz; // the accepted value, not the raw (possibly-gated-out) reading -- see above
     result.detectedClarity = pitch.clarity;
     result.semitoneShift = appliedShift; // the applied shift, not the raw target -- see Corrector::process()'s comment
 

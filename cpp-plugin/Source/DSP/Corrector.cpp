@@ -46,10 +46,30 @@ CorrectionResult Corrector::process (const std::vector<float>& samples, double s
     result.timings.detectUs = microsSince (detectStart);
 
     const auto quantizeStart = std::chrono::steady_clock::now();
+
+    // Gate acceptance on clarity before trusting this block's detection at
+    // all -- see detectedHzClarityAcceptThreshold's doc (docs/FINDINGS.md
+    // #31): a low-clarity reading is more likely the shared McLeod/NSDF
+    // detector locking onto a harmonic than a real pitch, so it's ignored
+    // in favor of the last trustworthy value rather than fed straight
+    // into the correction pipeline.
+    //
+    // detectedHzMaxPlausibleJumpSemitones' second gate is deliberately NOT
+    // applied here (docs/FINDINGS.md #32's revert note): confirmed harmful
+    // for PSOLA (a stateful, path-dependent grain accumulator that never
+    // resyncs after a rejection changes its trajectory) via a direct
+    // sample-level diff and the user's own A/B listening. This engine's
+    // own shifter is similarly stateful (a streaming STFT phase
+    // accumulator), so the same risk applies even without separately
+    // reproducing the measurement -- reverted here too rather than assumed
+    // safe.
+    if (pitch.frequencyHz > 0.0f && pitch.clarity >= detectedHzClarityAcceptThreshold)
+        heldDetectedHz = pitch.frequencyHz;
+
     float semitoneShift = 0.0f;
-    if (pitch.frequencyHz > 0.0f)
+    if (heldDetectedHz > 0.0f)
     {
-        const float currentNote = hzToMidi (pitch.frequencyHz);
+        const float currentNote = hzToMidi (heldDetectedHz);
         const int targetNote = nearestInScaleMidi ((int) std::round (currentNote), scale);
         semitoneShift = (float) targetNote - currentNote;
         if (! std::isfinite (semitoneShift))
@@ -73,7 +93,7 @@ CorrectionResult Corrector::process (const std::vector<float>& samples, double s
     shifter.shiftPitch (overSampling, appliedShift, samples, output);
     result.timings.shiftUs = microsSince (shiftStart);
 
-    result.detectedHz = pitch.frequencyHz;
+    result.detectedHz = heldDetectedHz; // the accepted value, not the raw (possibly-gated-out) reading -- see above
     result.detectedClarity = pitch.clarity;
     // The *applied* shift, not the raw full-snap target — this is what
     // actually reached the shifter, so it's what the GUI's "corrected
