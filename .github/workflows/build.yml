@@ -236,28 +236,6 @@ jobs:
       - name: Cache build (sccache)
         uses: mozilla-actions/sccache-action@v0.0.9
 
-      # ilammy/msvc-dev-cmd (above) correctly sets up cl.exe (CMake found
-      # it fine), but Git for Windows also ships its own usr/bin/link.exe
-      # (a coreutils hardlink utility, not a linker), and by the time
-      # Cargo's own build-script linking runs — from inside a bash step,
-      # several steps and one choco install later — that shadows MSVC's
-      # real link.exe: confirmed by a real failing run whose linker
-      # invocation resolved to "C:\Program Files\Git\usr\bin\link.exe"
-      # ("extra operand", exit code 1) despite the toolchain otherwise
-      # being set up correctly. $GITHUB_PATH prepends are the one PATH
-      # mechanism guaranteed to apply to every later step regardless of
-      # which shell invokes it, so it beats trying to out-guess exactly
-      # where msvc-dev-cmd's own PATH edit loses priority.
-      - name: Prioritize MSVC link.exe over Git's usr/bin/link.exe (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          if [ -n "$VCToolsInstallDir" ]; then
-            echo "${VCToolsInstallDir}bin/Hostx64/x64" >> "$GITHUB_PATH"
-          else
-            echo "VCToolsInstallDir not set by msvc-dev-cmd — cannot prioritize link.exe" >&2
-            exit 1
-          fi
-
       - name: Load .env
         run: |
           ENV_FILE=".env"
@@ -396,7 +374,23 @@ jobs:
             ${{ matrix.cmake-flags }}
 
       - name: Build
-        run: cmake --build ${{ env.BUILD_DIR }} --config ${{ env.BUILD_TYPE }} --parallel 4
+        run: |
+          # Prepending to $GITHUB_PATH in an earlier step had no effect
+          # here — confirmed by a real run where that step ran and
+          # correctly resolved $VCToolsInstallDir, yet the linker Cargo's
+          # build-script step found was still Git for Windows'
+          # usr/bin/link.exe (a coreutils hardlink utility, not a
+          # linker), not MSVC's. Git Bash likely reconstructs its own
+          # PATH at every step's shell startup and re-prepends its own
+          # usr/bin regardless of what accumulated in $GITHUB_PATH before
+          # it. Exporting PATH live, in-process, right before the actual
+          # build spawns cargo/rustc as a child of *this* shell sidesteps
+          # that: it can't be re-mangled by a shell startup that already
+          # happened.
+          if [ "$RUNNER_OS" = "Windows" ] && [ -n "$VCToolsInstallDir" ]; then
+            export PATH="$(cygpath -u "${VCToolsInstallDir}bin/Hostx64/x64"):$PATH"
+          fi
+          cmake --build ${{ env.BUILD_DIR }} --config ${{ env.BUILD_TYPE }} --parallel 4
 
       # ── Test ──────────────────────────────────────────────────────
       - name: Run Catch2 Tests
