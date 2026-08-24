@@ -253,7 +253,25 @@ jobs:
           # re-exported it to $GITHUB_ENV, clobbering the absolute
           # BUILD_DIR this workflow needs for every step after this one.
           # Re-assert it last so it wins.
-          echo "BUILD_DIR=${{ github.workspace }}/cpp-plugin/build" >> $GITHUB_ENV
+          #
+          # github.workspace is backslash-formatted on Windows
+          # (D:\a\pitchzazz\pitchzazz). Quoted uses of ${{ env.BUILD_DIR }}
+          # are safe, but this value also gets interpolated unquoted into
+          # bash run steps elsewhere in this workflow (e.g. `cmake -B
+          # ${{ env.BUILD_DIR }}`), and outside quotes Git Bash treats
+          # every backslash as an escape and strips it — collapsing
+          # "D:\a\pitchzazz\pitchzazz" into the drive-relative path
+          # "D:apitchzazzpitchzazz", which then resolves against the job's
+          # cpp-plugin working directory instead of the real one. Confirmed
+          # by a real failing Windows run whose CMake build landed at
+          # ".../cpp-plugin/apitchzazzpitchzazz/cpp-plugin/build" and broke
+          # the corrosion/cargo Rust-FFI link step. Normalizing to
+          # forward-slash here, once, means every later unquoted
+          # interpolation is safe by construction instead of relying on
+          # every call site remembering to quote it.
+          WORKSPACE_FWD="${{ github.workspace }}"
+          WORKSPACE_FWD="${WORKSPACE_FWD//\\//}"
+          echo "BUILD_DIR=${WORKSPACE_FWD}/cpp-plugin/build" >> $GITHUB_ENV
 
       # ── Signing status detection ──────────────────────────────────
       - name: Determine signing status
