@@ -1263,8 +1263,8 @@
     </div>
 
     <div class="callout"><strong>Rendered offline:</strong> two small render tools,
-      <code>cpp-plugin/benchmarks/RenderDemoAudio.cpp</code> for the three C++ engines and
-      <code>crates/pitch-core/examples/render_demo_audio.rs</code> for Rust, each feeding a WAV through the
+      <a href="https://github.com/mcfredrick/pitchzazz/blob/main/cpp-plugin/benchmarks/RenderDemoAudio.cpp" target="_blank" rel="noopener noreferrer"><code>cpp-plugin/benchmarks/RenderDemoAudio.cpp</code></a> for the three C++ engines and
+      <a href="https://github.com/mcfredrick/pitchzazz/blob/main/crates/pitch-core/examples/render_demo_audio.rs" target="_blank" rel="noopener noreferrer"><code>crates/pitch-core/examples/render_demo_audio.rs</code></a> for Rust, each feeding a WAV through the
       corrector at its real block size and calling the identical <code>process()</code> path the live
       plugin/CLI uses. The Rust render uses <code>pitch-cli</code>'s real defaults (block size 2048, 50ms
       analysis window).</div>
@@ -1298,54 +1298,56 @@
       matching the quality-metrics data above (99.18% artifact energy for TD-PSOLA at +12 semitones, a 22-30%
       baseline for Varispeed at every shift). Both were known, actively-investigated limitations of these
       experimental engines. The phase vocoder's design resists this class of artifact structurally, and it
-      remains the plugin's default engine. Two rounds of deeper investigation below turned up a much larger root
-      cause on TD-PSOLA than originally understood.</div>
+      remains the plugin's default engine. Further investigation, below, found a much larger cause on TD-PSOLA
+      than originally understood.</div>
 
-    <div class="callout"><strong>A shared bug across two unrelated engines.</strong> Closer listening turned up
-      something distinct from the crackle/comb-filtering above: a brief "roughness," roughly an octave below the
-      fundamental, tracking the singer's pitch, with the <em>same</em> character on TD-PSOLA and Varispeed
-      despite them being structurally unrelated algorithms. That similarity was the clue. The cause wasn't in
-      either pitch-shifting engine. It was the pitch detector all three engines rely on, which occasionally locks
-      onto the second harmonic of a note instead of the true fundamental. Because all three engines run the
-      same input through an identical, deterministic detector, they all get the same wrong reading at the same
-      moment, biasing the applied correction by roughly an octave on real, correctly-pitched audio. The phase
-      vocoder gets the same bad reading but isn't audibly affected, because its shifting method spreads the
-      correction across many overlapping analysis windows, which smooths out a single bad reading instead of
-      applying it as a sharp jump. Fixed by checking the detector's own confidence score for each reading and
-      ignoring readings it wasn't confident about, using the last trustworthy value instead.</div>
+    <div class="demo-controls" style="flex-direction:column; align-items:stretch; gap:10px; margin-bottom:10px;">
+      <label style="font-family:var(--mono); font-size:14px; color:var(--ink-dim);"><span class="swatch" style="background:var(--amber)"></span>TD-PSOLA, before this investigation</label>
+      <audio controls preload="none" style="width:100%;" src="audio/demo-psola-before.mp3"></audio>
+    </div>
+    <div class="demo-controls" style="flex-direction:column; align-items:stretch; gap:10px; margin-bottom:20px;">
+      <label style="font-family:var(--mono); font-size:14px; color:var(--ink-dim);"><span class="swatch" style="background:var(--amber)"></span>Varispeed, before this investigation</label>
+      <audio controls preload="none" style="width:100%;" src="audio/demo-varispeed-before.mp3"></audio>
+    </div>
+
+    <div class="callout"><strong>A shared bug across two unrelated engines.</strong> Closer listening found a
+      persistent roughness, roughly an octave below the fundamental, tracking the singer's pitch, with the
+      <em>same</em> character on TD-PSOLA and Varispeed despite them being structurally unrelated algorithms.
+      That similarity was the clue. The cause wasn't in either pitch-shifting engine. It was the pitch detector
+      all three engines share, which occasionally locks onto a note's second harmonic instead of the true
+      fundamental, and since all three engines run the same input through an identical, deterministic detector,
+      they all get the same wrong reading at once, biasing the correction by roughly an octave on real,
+      correctly-pitched audio. The phase vocoder gets the same bad reading but isn't audibly affected, since its
+      shifting method spreads the correction across many overlapping analysis windows, smoothing out a single
+      bad reading instead of applying it as a sharp jump. Fixed by checking the detector's own confidence for
+      each reading and falling back to the last trustworthy value when it's low.</div>
 
     <div class="callout"><strong>The real cause of the persistent roughness on TD-PSOLA.</strong> After the fix
-      above shipped, the artifact people kept describing as "roughness that follows the pitch" was still there,
-      unchanged. That first fix turned out to catch a real but smaller, separate bug. A first guess, that the
-      real problem was a periodic artifact tied to the plugin's internal processing block size, was tested
-      directly by changing the block size and checking whether the artifact's frequency moved to the exactly
-      predicted new value. It did, three times running. That effect turned out to be genuine, but it mattered
-      far more for Varispeed than for TD-PSOLA, and fixing it on TD-PSOLA changed nothing audible. The real
-      cause was found by instrumenting TD-PSOLA's grain-placement code directly against this real vocal clip
-      rather than a synthetic tone, and turned out to be a numerical instability. The code located each grain's
-      read position by dividing an ever-growing sample count (nearing a million samples deep into the clip) by
-      the detected pitch period, and that period shifts slightly every processing block from ordinary detection
-      noise. Even a change of well under 1% in that divisor, applied to a huge number, produced read-position
-      jumps of hundreds of milliseconds, recurring roughly 24 times a second throughout almost the entire clip.
-      Fixed by applying a standard technique from granular synthesis and audio resampling, tracking the read
-      position as a running total that only ever moves in small, bounded steps, rather than recomputing it from
-      an ever-growing absolute position each time. Verifying against the same real clip showed the worst-case
-      jump had dropped from over 13,000 periods (several seconds of audio) to about 20. This is the fix
-      behind the TD-PSOLA clip below.</div>
+      above shipped, the persistent roughness was still there, unchanged. That first fix caught a real but
+      smaller, separate bug. A first guess, that the real problem was a periodic artifact tied to the plugin's
+      internal processing block size, was tested directly by changing the block size and checking whether the
+      artifact's frequency moved to the exactly predicted new value. It did, three times running, but the effect
+      mattered far more for Varispeed than for TD-PSOLA, and fixing it on TD-PSOLA changed nothing audible. The
+      real cause was found by instrumenting TD-PSOLA's grain-placement code directly against this real vocal
+      clip rather than a synthetic tone, and it turned out to be a numerical instability. The code located each grain's read position by
+      dividing an ever-growing sample count by the detected pitch period, and that period shifts slightly every
+      processing block from ordinary detection noise, so even a tiny shift in the divisor produced large
+      read-position jumps, recurring roughly 24 times a second throughout almost the entire clip. Fixed using a
+      standard technique from granular synthesis and audio resampling. Instead of recomputing the read position
+      from an ever-growing absolute position each time, it's now tracked as a running total that only ever
+      moves in small, bounded steps.</div>
 
     <div class="callout" style="border-color:var(--amber);"><strong>A known, disclosed limitation that remains.</strong>
       A small, subtle crackle is still audible on TD-PSOLA at two moments in this clip, both landing on moments
-      where the singer's pitch genuinely and quickly changes within a single processing block, a different
-      situation from the bad detector readings described above. A plausible explanation, not yet confirmed by
-      targeted measurement, is that the fix above smooths pitch changes evenly across an entire processing
-      block, which works well for the small block-to-block variation it targets, but a real vocal transition
-      that fast isn't a smooth, evenly paced glide, so a brief mismatch can still occur right at the transition.
-      A second attempt at fixing this, rejecting implausibly large pitch jumps outright, was implemented,
-      measured, and reverted in the same round of work. The read-position tracking above builds on its own
-      history, so rejecting even a correct reading permanently shifted grain placement for the rest of the
-      render. Both a direct before/after
-      comparison of the audio and listening back confirmed the whole clip got worse overall, even though those
-      two specific moments improved. Left open rather than shipped half-fixed.</div>
+      where the singer's pitch genuinely and quickly changes within a single processing block, unrelated to the
+      bad detector readings above. A plausible explanation, not yet confirmed by targeted measurement, is that
+      the fix above smooths pitch changes evenly across a whole processing block, which works well for ordinary
+      block-to-block variation but not for a real vocal transition that fast, so a brief mismatch can still occur
+      right at the transition. A second attempt at fixing this, rejecting implausibly large pitch jumps outright,
+      was implemented, measured, and reverted in the same round of work. The read-position tracking above builds
+      on its own history, so rejecting even a correct reading permanently shifted grain placement for the rest of
+      the render, and both a direct audio comparison and listening back confirmed the whole clip got worse
+      overall. Left open rather than shipped half-fixed.</div>
   </section>
 
   <p style="text-align:center; margin:0 0 40px; font-family:var(--mono); font-size:14.5px;">
