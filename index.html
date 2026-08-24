@@ -1154,7 +1154,7 @@
 
     <figure>
       <div class="fig-frame">
-        <svg viewBox="0 0 900 260" role="img" aria-label="Grouped bar chart: artifact energy percent by engine, at five semitone shifts each (minus twelve, minus three, zero, three, twelve). Phase vocoder stays under one percent at every shift. TD-PSOLA stays under one and a half percent at every shift except twelve semitones up, where it jumps to ninety-nine percent. Varispeed sits around twenty-two to twenty-four percent for zero and negative shifts, rising to about twenty-seven to twenty-nine percent for positive shifts.">
+        <svg viewBox="0 0 900 260" role="img" aria-label="Grouped bar chart: artifact energy percent by engine, at five semitone shifts each (minus twelve, minus three, zero, three, twelve). Phase vocoder stays under one percent at every shift. TD-PSOLA stays under one and a half percent at every shift except twelve semitones up, where it jumps to ninety-nine percent. Varispeed now stays under nineteen percent at every shift, near zero at zero and small shifts, rising to about eleven percent at minus twelve and eighteen and a half percent at plus twelve, after a real fix removed a block-rate bug that used to dominate this chart.">
           <text x="20" y="22" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="15" fill="#f1f1f6">ARTIFACT ENERGY% by shift (THD+N% is in the table below)</text>
 
           <!-- y axis gridlines + labels: 0/25/50/75/100% -->
@@ -1204,13 +1204,13 @@
           </g>
           <text x="470" y="238" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="14.5" fill="#f1f1f6">TD-PSOLA</text>
 
-          <!-- Varispeed: -12=23.57 -3=22.75 0=22.34 3=27.37 12=28.74 -->
+          <!-- Varispeed, re-measured 2026-08-24 after the block-rate-artifact fix (docs/FINDINGS.md #33): -12=10.92 -3=4.80 0=0.56 3=16.50 12=18.53. 0st drawn at the same 2px visibility floor as the phase vocoder group, its true height (~0.9px) is sub-pixel. -->
           <g fill="#00e5ff">
-            <rect x="658" y="172.3" width="30" height="37.7" fill-opacity="0.25"/>
-            <rect x="694" y="173.6" width="30" height="36.4" fill-opacity="0.45"/>
-            <rect x="730" y="174.3" width="30" height="35.7" fill-opacity="0.65"/>
-            <rect x="766" y="166.2" width="30" height="43.8" fill-opacity="0.85"/>
-            <rect x="802" y="164.0" width="30" height="46.0" fill-opacity="1.0"/>
+            <rect x="658" y="192.5" width="30" height="17.5" fill-opacity="0.25"/>
+            <rect x="694" y="202.3" width="30" height="7.7" fill-opacity="0.45"/>
+            <rect x="730" y="208" width="30" height="2" fill-opacity="0.65"/>
+            <rect x="766" y="183.6" width="30" height="26.4" fill-opacity="0.85"/>
+            <rect x="802" y="180.4" width="30" height="29.6" fill-opacity="1.0"/>
           </g>
           <g font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12.5" fill="#8a8d9c" text-anchor="middle">
             <text x="673" y="221">&minus;12</text><text x="709" y="221">&minus;3</text><text x="745" y="221">0</text><text x="781" y="221">+3</text><text x="817" y="221">+12</text>
@@ -1222,8 +1222,9 @@
         table below has both metrics, including THD+N% and the undefined case at PSOLA &minus;12st. Phase
         vocoder bars are drawn at a flat 2px minimum, regardless of their true sub-pixel height. The shape matters as
         much as the endpoints: TD-PSOLA is fine everywhere except +12st, where it drops off a cliff instead of
-        sliding. Varispeed's baseline shift is already present at &minus;12/&minus;3/0, then climbs further on
-        the positive side.</figcaption>
+        sliding. Varispeed now starts near zero at unison and small shifts and climbs toward the extremes, a real
+        resampler-interpolation cost left over after the block-rate bug that used to dominate this chart got
+        fixed (see the Listen section below).</figcaption>
     </figure>
 
     <div class="math-card cyan">
@@ -1241,8 +1242,8 @@
           <tr><td><span class="swatch" style="background:var(--cyan)"></span>TD-PSOLA</td><td>0 st</td><td>0.56</td><td>0.56</td></tr>
           <tr><td><span class="swatch" style="background:var(--cyan)"></span>TD-PSOLA</td><td>&minus;12 st</td><td>undefined</td><td>0.57</td></tr>
           <tr><td><span class="swatch" style="background:var(--cyan)"></span>TD-PSOLA</td><td>+12 st</td><td>775.86</td><td><strong>99.18</strong></td></tr>
-          <tr><td><span class="swatch" style="background:var(--cyan)"></span>Varispeed</td><td>0 st</td><td>22.96</td><td>22.34</td></tr>
-          <tr><td><span class="swatch" style="background:var(--cyan)"></span>Varispeed</td><td>&minus;12 / +12 st</td><td>24.61 / 30.01</td><td>23.57 / 28.74</td></tr>
+          <tr><td><span class="swatch" style="background:var(--cyan)"></span>Varispeed</td><td>0 st</td><td>0.56</td><td>0.56</td></tr>
+          <tr><td><span class="swatch" style="background:var(--cyan)"></span>Varispeed</td><td>&minus;12 / +12 st</td><td>10.98 / 18.85</td><td>10.92 / 18.53</td></tr>
         </tbody>
       </table>
     </div>
@@ -1250,16 +1251,19 @@
     <p style="color:var(--ink-dim); font-size:16px;">The phase vocoder drops any bin that would land above
       Nyquist instead of wrapping it. Structural anti-aliasing, and it shows: clean across the whole range.
       TD-PSOLA breaks down asymmetrically at the extremes: severe and broad at +12 semitones, narrow (a fundamental collapse) at &minus;12. Varispeed's resampler has no anti-aliasing pre-filter by design, same as
-      physical tape. Now with a real number attached instead of a comment predicting it.</p>
-    <p style="color:var(--ink-dim); font-size:16px; margin-top:-6px;">Not scored here: the TD-PSOLA crackle/beat
-      artifact heard on real singing. It's a grain-boundary discontinuity plus a beat between the fixed analysis
-      grid and the voice's natural jitter. PSOLA never resamples, so a stationary test tone can't expose it. Three
-      automated approaches have already failed to score it. Left open and disclosed here.</p>
+      physical tape, and a real, shift-dependent residual from that plus its own cubic-Hermite interpolation error still climbs toward the extremes. Most of what this chart used to show here, though, was a real,
+      since-fixed block-rate bug rather than that inherent cost, see the Listen section below for the fix.</p>
+    <p style="color:var(--ink-dim); font-size:16px; margin-top:-6px;">This metric still can't score one thing,
+      structurally. It only ever uses a stationary test tone, so it can't expose an artifact that depends on real
+      voice's own natural jitter the way TD-PSOLA's persistent crackle did. That artifact has since been
+      root-caused and mostly fixed by direct instrumentation against real vocal audio instead. See the Listen
+      section below for the fix and its small, disclosed residual.</p>
 
     <div class="math-card cyan">
-      <div class="mc-label">where to spend time next (not yet done)</div>
-      <div class="math-line"><span class="k">Varispeed fix</span><span class="v">isolate resampler, WSOLA, and gain-ramp separately. The 22% baseline conflates all three, and this is the one engine where an anti-aliasing pre-filter is actually worth A/B testing.</span></div>
-      <div class="math-line"><span class="k">crackle measurement</span><span class="v">a spectral-flux/onset metric (frame-to-frame discontinuity) that could let a <em>future</em> fix attempt actually get verified with data. The reverted cross-fade attempt never had that.</span></div>
+      <div class="mc-label">where to spend time next</div>
+      <div class="math-line"><span class="k">Varispeed's 22% baseline</span><span class="v"><strong>done.</strong> Mostly a real, since-fixed block-rate bug. What's left is a smaller, real, shift-dependent interpolation cost, accepted and disclosed as a known limitation.</span></div>
+      <div class="math-line"><span class="k">Varispeed shortfalls</span><span class="v">still open. About 1.5% of blocks now run genuinely short, up to 30ms, after the fix above. Why the two-stage pipeline occasionally can't keep up hasn't been chased down yet.</span></div>
+      <div class="math-line"><span class="k">TD-PSOLA crackle</span><span class="v"><strong>mostly done.</strong> Root-caused and fixed by direct real-voice instrumentation. A small residual remains, isolated to two known spurious-detection glitches.</span></div>
     </div>
 
   </section>
