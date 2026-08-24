@@ -1254,7 +1254,7 @@
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--green)"><span class="dot" style="background:var(--green)"></span>06 &middot; listen<span class="stage-tag">deep dive</span></div>
       <h2>The same clip, four engines, your ears</h2>
-      <p>Everything above this point is a number or a diagram. This section plays real audio instead: one
+      <p>Everything above this point is a number or a diagram. This section plays real audio instead, one
         22-second clip corrected into <strong>G major</strong>, run through all four engines. The three C++
         engines, <code>Corrector</code>, <code>PSOLACorrector</code>, and <code>VarispeedCorrector</code>, use
         the plugin's 420ms "Smooth" retune-speed glide. Rust has no such control, so its render runs at its only
@@ -1298,8 +1298,8 @@
       matching the quality-metrics data above (99.18% artifact energy for TD-PSOLA at +12 semitones, a 22-30%
       baseline for Varispeed at every shift). Both were known, actively-investigated limitations of these
       experimental engines. The phase vocoder's design resists this class of artifact structurally, and it
-      remains the plugin's default engine. Further investigation, below, found a much larger cause on TD-PSOLA
-      than originally understood.</div>
+      remains the plugin's default engine. Further investigation, below, found and fixed a much larger cause on
+      both engines than originally understood.</div>
 
     <div class="demo-controls" style="flex-direction:column; align-items:stretch; gap:10px; margin-bottom:10px;">
       <label style="font-family:var(--mono); font-size:14px; color:var(--ink-dim);"><span class="swatch" style="background:var(--amber)"></span>TD-PSOLA, before this investigation</label>
@@ -1320,13 +1320,18 @@
       correctly-pitched audio. The phase vocoder gets the same bad reading but isn't audibly affected, since its
       shifting method spreads the correction across many overlapping analysis windows, smoothing out a single
       bad reading instead of applying it as a sharp jump. Fixed by checking the detector's own confidence for
-      each reading and falling back to the last trustworthy value when it's low.</div>
+      each reading and falling back to the last trustworthy value when it's low. Confirmed with a small
+      standalone probe,
+      <a href="https://github.com/mcfredrick/pitchzazz/blob/main/cpp-plugin/benchmarks/PitchDetectorOctaveProbe.cpp" target="_blank" rel="noopener noreferrer"><code>PitchDetectorOctaveProbe.cpp</code></a>,
+      built to run only the shared pitch detector against this real vocal clip and print its confidence per
+      reading, rather than a synthetic test tone.</div>
 
     <div class="callout"><strong>The real cause of the persistent roughness on TD-PSOLA.</strong> After the fix
       above shipped, the persistent roughness was still there, unchanged. That first fix caught a real but
       smaller, separate bug. A first guess, that the real problem was a periodic artifact tied to the plugin's
-      internal processing block size, was tested directly by changing the block size and checking whether the
-      artifact's frequency moved to the exactly predicted new value. It did, three times running, but the effect
+      internal processing block size, was tested directly by re-rendering this same clip at different block
+      sizes (an override added to the render tool above) and checking whether the artifact's frequency moved to
+      the exactly predicted new value. It did, three times running, but the effect
       mattered far more for Varispeed than for TD-PSOLA, and fixing it on TD-PSOLA changed nothing audible. The
       real cause was found by instrumenting TD-PSOLA's grain-placement code directly against this real vocal
       clip rather than a synthetic tone, and it turned out to be a numerical instability. The code located each grain's read position by
@@ -1337,7 +1342,7 @@
       from an ever-growing absolute position each time, it's now tracked as a running total that only ever
       moves in small, bounded steps.</div>
 
-    <div class="callout" style="border-color:var(--amber);"><strong>A known, disclosed limitation that remains.</strong>
+    <div class="callout" style="border-color:var(--amber);"><strong>A known, disclosed limitation that remains on TD-PSOLA.</strong>
       A small, subtle crackle is still audible on TD-PSOLA at two moments in this clip, both landing on moments
       where the singer's pitch genuinely and quickly changes within a single processing block, unrelated to the
       bad detector readings above. A plausible explanation, not yet confirmed by targeted measurement, is that
@@ -1348,6 +1353,26 @@
       on its own history, so rejecting even a correct reading permanently shifted grain placement for the rest of
       the render, and both a direct audio comparison and listening back confirmed the whole clip got worse
       overall. Left open rather than shipped half-fixed.</div>
+
+    <div class="callout"><strong>Varispeed's own block-rate artifact, fixed the same way.</strong> The block-size
+      test above was genuine for Varispeed too, and mattered far more there than for TD-PSOLA. Re-rendering the
+      same clip at different block sizes and re-checking the artifact's frequency against the exactly predicted
+      value, at three different sizes, found the mechanism directly. Varispeed's shift stage computed a single
+      ratio once per processing block and used that one constant value for its entire duration, so its internal
+      read rate took a genuine step at every block boundary. Fixed the same way as TD-PSOLA above, ramping that
+      ratio smoothly across each block instead. A second, separate, more direct bug turned up in the same code
+      while checking whether that first fix was enough. A click-suppression fade meant to run only right before
+      a genuine gap in the audio was computing its fade window unconditionally, so in ordinary healthy playback
+      it quietly faded the last few milliseconds of <em>every single block</em> toward silence and then ramped
+      back up at the start of the next one, an unconditional, periodic dip exactly at the block rate. Fixed by
+      only fading when there's an actual shortfall to anticipate. Re-checked at three block sizes again after
+      both fixes, this time with no measurable frequency shift at all, the exact opposite of the result that
+      first confirmed the bug. An unrelated, independent spectral-purity check
+      (<a href="https://github.com/mcfredrick/pitchzazz/blob/main/cpp-plugin/tests/DSP/QualityMetricsTests.cpp" target="_blank" rel="noopener noreferrer"><code>QualityMetricsTests.cpp</code></a>)
+      agreed. Varispeed's baseline artifact energy at unison dropped from about 23% to about 0.6%, now matching
+      TD-PSOLA and the phase vocoder's own clean baseline almost exactly. A smaller, real remainder at larger
+      shifts is expected and already disclosed elsewhere on this page. Varispeed's resampling stage has its own
+      accepted, unrelated interpolation error that scales with shift amount.</div>
   </section>
 
   <p style="text-align:center; margin:0 0 40px; font-family:var(--mono); font-size:14.5px;">
