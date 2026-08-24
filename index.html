@@ -335,6 +335,8 @@
     <a href="#shift"><span class="dot" style="background:var(--green)"></span>shift</a>
     <span class="arrow">&rarr;</span>
     <a href="#quality"><span class="dot" style="background:var(--cyan)"></span>quality</a>
+    <span class="arrow">&rarr;</span>
+    <a href="#listen"><span class="dot" style="background:var(--green)"></span>listen</a>
   </div>
 </nav>
 
@@ -1243,6 +1245,61 @@
       <div class="math-line"><span class="k">crackle measurement</span><span class="v">a spectral-flux/onset metric (frame-to-frame discontinuity) that could let a <em>future</em> fix attempt actually get verified with data. The reverted cross-fade attempt never had that.</span></div>
     </div>
 
+  </section>
+
+  <!-- =========================================================
+       LISTEN
+  ========================================================== -->
+  <section class="stage" id="listen">
+    <div class="stage-head">
+      <div class="stage-eyebrow" style="color:var(--green)"><span class="dot" style="background:var(--green)"></span>06 &middot; listen<span class="stage-tag">deep dive</span></div>
+      <h2>The same clip, four engines, your ears</h2>
+      <p>Everything above this point is a number or a diagram. This section plays real audio instead: one
+        22-second clip corrected into <strong>G major</strong>, run through all four engines. The three C++
+        engines, <code>Corrector</code>, <code>PSOLACorrector</code>, and <code>VarispeedCorrector</code>, use
+        the plugin's 420ms "Smooth" retune-speed glide. Rust has no such control, so its render runs at its only
+        mode, instant-snap. Every render calls each engine's actual production code, block by block, the same
+        way the plugin's worker thread (or <code>pitch-cli</code>'s) runs it live.</p>
+    </div>
+
+    <div class="callout"><strong>Rendered offline:</strong> two small render tools,
+      <code>cpp-plugin/benchmarks/RenderDemoAudio.cpp</code> for the three C++ engines and
+      <code>crates/pitch-core/examples/render_demo_audio.rs</code> for Rust, each feeding a WAV through the
+      corrector at its real block size and calling the identical <code>process()</code> path the live
+      plugin/CLI uses. The Rust render uses <code>pitch-cli</code>'s real defaults (block size 2048, 50ms
+      analysis window).</div>
+
+    <div class="demo-controls" style="flex-direction:column; align-items:stretch; gap:10px; margin-bottom:20px;">
+      <label style="font-family:var(--mono); font-size:14px; color:var(--ink-dim);">dry input</label>
+      <audio controls preload="none" style="width:100%;" src="audio/demo-dry.mp3"></audio>
+    </div>
+
+    <div class="demo-controls" style="flex-direction:column; align-items:stretch; gap:10px; margin-bottom:20px;">
+      <label style="font-family:var(--mono); font-size:14px; color:var(--ink-dim);"><span class="swatch" style="background:var(--cyan)"></span>Rust (instant-snap, no smoothing control)</label>
+      <audio controls preload="none" style="width:100%;" src="audio/demo-rust.mp3"></audio>
+    </div>
+
+    <div class="demo-controls" style="flex-direction:column; align-items:stretch; gap:10px; margin-bottom:20px;">
+      <label style="font-family:var(--mono); font-size:14px; color:var(--ink-dim);"><span class="swatch" style="background:var(--cyan)"></span>Phase Vocoder (420ms smoothing)</label>
+      <audio controls preload="none" style="width:100%;" src="audio/demo-phase-vocoder.mp3"></audio>
+    </div>
+
+    <div class="demo-controls" style="flex-direction:column; align-items:stretch; gap:10px; margin-bottom:20px;">
+      <label style="font-family:var(--mono); font-size:14px; color:var(--ink-dim);"><span class="swatch" style="background:var(--cyan)"></span>TD-PSOLA (420ms smoothing)</label>
+      <audio controls preload="none" style="width:100%;" src="audio/demo-psola.mp3"></audio>
+    </div>
+
+    <div class="demo-controls" style="flex-direction:column; align-items:stretch; gap:10px; margin-bottom:20px;">
+      <label style="font-family:var(--mono); font-size:14px; color:var(--ink-dim);"><span class="swatch" style="background:var(--cyan)"></span>Varispeed + WSOLA (420ms smoothing)</label>
+      <audio controls preload="none" style="width:100%;" src="audio/demo-varispeed.mp3"></audio>
+    </div>
+
+    <div class="callout"><strong>TD-PSOLA and Varispeed carry real, audible artifacts here,</strong> matching the
+      quality-metrics data above (99.18% artifact energy for TD-PSOLA at +12 semitones, a 22-30% baseline for
+      Varispeed at every shift). Both are known, actively-investigated limitations of these experimental
+      engines. The phase vocoder's design resists this class of artifact structurally, and it remains the
+      plugin's default engine. The investigation trail for TD-PSOLA's crackle/beat and Varispeed's
+      comb-filtering lives in <code>docs/FINDINGS.md</code>.</div>
   </section>
 
   <p style="text-align:center; margin:0 0 40px; font-family:var(--mono); font-size:14.5px;">
