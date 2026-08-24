@@ -11,3 +11,4 @@ pitch_shift = "1.0"
 rust-music-theory = "0.2"
 
 [dev-dependencies]
+hound = "3"
