@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pitchzazz Notebook</title>
+<title>Show Me How You Pitchzazz</title>
 <meta name="description" content="An illustrated walkthrough of pitchzazz's real-time engine and detect/quantize/shift pipeline, with the real windowing, math, and hot-swap mechanism behind every stage.">
-<meta property="og:title" content="Pitchzazz Notebook">
+<meta property="og:title" content="Show Me How You Pitchzazz">
 <meta property="og:description" content="How pitchzazz actually hears and re-pitches a voice, in diagrams and formulas, linked straight to source.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#12141a">
@@ -347,12 +347,7 @@
 
   <header class="hero">
     <div class="eyebrow">field notes &middot; <abbr class="ac" tabindex="0" data-tip="Digital Signal Processing: the math that manipulates an audio signal: detection, filtering, shifting">DSP</abbr> mechanisms</div>
-    <h1>How pitchzazz <span class="lit">actually</span> hears<br>and re-pitches a voice</h1>
-    <p class="lede">Every audio block runs through three <abbr class="ac" tabindex="0" data-tip="Digital Signal Processing: the math that manipulates an audio signal: detection, filtering, shifting">DSP</abbr> stages: <em>detect</em> the pitch, <em>quantize</em> it to
-      the nearest note in scale, <em>shift</em> the signal there. A real-time <em>engine</em> keeps that from
-      glitching, and a <em>hot-swap</em> mechanism can change which shift algorithm is running mid-performance.
-      This notebook covers the windowing, the transforms, the actual formulas behind each stage. Every math
-      card links to the exact source line on GitHub.</p>
+    <h1>Show Me How You <span class="lit">Pitchzazz</span></h1>
     <div class="chip-row">
       <span class="chip">lock-free ring buffers</span>
       <span class="chip">McLeod Pitch Method</span>
@@ -376,11 +371,10 @@
   <section class="stage" id="engine">
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--magenta)"><span class="dot" style="background:var(--magenta)"></span>00 &middot; engine<span class="stage-tag core">core path</span></div>
-      <h2>The real-time engine</h2>
-      <p>The <abbr class="ac" tabindex="0" data-tip="Operating System">OS</abbr> calls the audio callback on a hard deadline: one buffer's worth of time. Miss it and it
-        drops audio as an audible glitch. The callback only pushes or pops a
-        lock-free queue. Detect, quantize, and shift happen on a separate worker thread with no deadline of
-        its own, so none of the normal audio-thread rules apply there.</p>
+      <h2>If I Could Turn Back Realtime</h2>
+      <p>The <abbr class="ac" tabindex="0" data-tip="Operating System">OS</abbr> calls the audio callback on a hard deadline: one buffer's worth of time. Miss it
+        and you hear an audible glitch. So the audio callback only pushes or pops a
+        lock-free queue. Detect, quantize, and shift happen on a separate worker thread where we have time for some real math.</p>
     </div>
 
     <figure>
@@ -492,8 +486,8 @@
   ========================================================== -->
   <section class="stage" id="detect">
     <div class="stage-head">
-      <div class="stage-eyebrow" style="color:var(--cyan)"><span class="dot" style="background:var(--cyan)"></span>01 &middot; detect<span class="stage-tag core">core path</span></div>
-      <h2>Finding the pitch: autocorrelation, normalized</h2>
+      <div class="stage-eyebrow" style="color:var(--cyan)"><span class="dot" style="background:var(--cyan)"></span>01 &middot; detect<span class="stage-tag">deep dive</span></div>
+      <h2>What's My Pitch Again?</h2>
       <p>A pitched sound is <strong>periodic</strong>. Its waveform repeats every T samples, where T is the
         pitch period. Take a copy of the signal, slide it sideways by some lag <abbr class="ac" tabindex="0" data-tip="Tau: the lag, in samples, being tested when sliding a delayed copy of the signal against the original">&tau;</abbr>, and ask whether the copy
         looks like the original again. For almost every <abbr class="ac" tabindex="0" data-tip="Tau: the lag, in samples, being tested when sliding a delayed copy of the signal against the original">&tau;</abbr> the answer is no. But the moment <abbr class="ac" tabindex="0" data-tip="Tau: the lag, in samples, being tested when sliding a delayed copy of the signal against the original">&tau;</abbr> equals the
@@ -580,8 +574,8 @@
   ========================================================== -->
   <section class="stage" id="quantize">
     <div class="stage-head">
-      <div class="stage-eyebrow" style="color:var(--amber)"><span class="dot" style="background:var(--amber)"></span>02 &middot; quantize<span class="stage-tag core">core path</span></div>
-      <h2>Snapping to the scale: outward search, ties go low</h2>
+      <div class="stage-eyebrow" style="color:var(--amber)"><span class="dot" style="background:var(--amber)"></span>02 &middot; quantize<span class="stage-tag">deep dive</span></div>
+      <h2>Snap Yo Pitches</h2>
       <p>Twelve pitch classes, wrapped into an octave. If the detected note is already in the scale, it passes
         through untouched. If not, the search walks outward by semitone. One below, one above, two below,
         two above. Until it lands on one that belongs. This is genuinely two separate steps. A detected
@@ -657,7 +651,7 @@
   <section class="stage" id="hotswap">
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--magenta)"><span class="dot" style="background:var(--magenta)"></span>03 &middot; hot-swap<span class="stage-tag core">core path</span></div>
-      <h2>Changing engines live, with no dropout</h2>
+      <h2>HOT TO GO!</h2>
       <p>In the actual plugin, swapping from the phase vocoder to <abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add: shifts pitch by re-spacing time-domain grains at pitch marks">TD-PSOLA</abbr> mid-performance is one pick from the
         Engine dropdown, instant, no pause, no click. This section covers the mechanism that makes that possible.
         <strong>One atomic pointer exchange</strong>, picked up by the worker thread between blocks, never
@@ -795,8 +789,8 @@
   ========================================================== -->
   <section class="stage" id="shift">
     <div class="stage-head">
-      <div class="stage-eyebrow" style="color:var(--green)"><span class="dot" style="background:var(--green)"></span>04 &middot; shift<span class="stage-tag">deep dive</span></div>
-      <h2>Three engines, three genuinely different mechanisms</h2>
+      <div class="stage-eyebrow" style="color:var(--green)"><span class="dot" style="background:var(--green)"></span>04 &middot; shift<span class="stage-tag core">core path</span></div>
+      <h2>Tailored Shift</h2>
       <p>Once the target note is known, something has to actually move the pitch there. Pitchzazz ships
         <strong>three</strong> hot-swappable engines, each solving this with unrelated physics: one reasons about
         frequency, one about time-domain grains, one about playback rate. This is where the real windowing and
@@ -804,7 +798,7 @@
     </div>
 
     <!-- ---- Phase Vocoder ---- -->
-    <div class="sub-card on-green">
+    <div class="sub-card on-green" id="shift-vocoder" style="scroll-margin-top:70px;">
       <h3>Phase Vocoder <span class="full-name">(frequency domain)</span></h3>
       <p>Take the signal into the frequency domain with an <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform: converts a signal between the time and frequency domains in O(N log N)">FFT</abbr>, then move each bin's content to a new bin
         scaled by the pitch ratio. Relocating spectral content <strong>is</strong> the pitch shift. The phase
@@ -913,7 +907,7 @@
     </div>
 
     <!-- ---- TD-PSOLA ---- -->
-    <div class="sub-card on-green">
+    <div class="sub-card on-green" id="shift-psola" style="scroll-margin-top:70px;">
       <h3><abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add: shifts pitch by re-spacing time-domain grains at pitch marks">TD-PSOLA</abbr> <span class="full-name">(time domain, grain-based)</span></h3>
       <p>No <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform: converts a signal between the time and frequency domains in O(N log N)">FFT</abbr> at all. Cut the signal into small windowed grains, one centered on each detected pitch period,
         then paste them back down at new positions. Closer together to raise pitch, farther apart to lower
@@ -962,7 +956,7 @@
     </div>
 
     <!-- ---- Varispeed + WSOLA ---- -->
-    <div class="sub-card on-green">
+    <div class="sub-card on-green" id="shift-varispeed" style="scroll-margin-top:70px;">
       <h3>Varispeed + <abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add: time-stretches audio by splicing overlapping windows at the best-correlated offset">WSOLA</abbr> <span class="full-name">(stretch, then resample)</span></h3>
       <p>The odd one out: pitch changes by genuinely changing playback rate, like varispeed-ing a tape reel,
         formants included, on purpose. Two stages: <strong><abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add: time-stretches audio by splicing overlapping windows at the best-correlated offset">WSOLA</abbr></strong> stretches the signal in
@@ -1139,8 +1133,8 @@
   ========================================================== -->
   <section class="stage" id="quality">
     <div class="stage-head">
-      <div class="stage-eyebrow" style="color:var(--cyan)"><span class="dot" style="background:var(--cyan)"></span>05 &middot; quality<span class="stage-tag">deep dive</span></div>
-      <h2>How clean can we get?</h2>
+      <div class="stage-eyebrow" style="color:var(--cyan)"><span class="dot" style="background:var(--cyan)"></span>05 &middot; quality<span class="stage-tag core">core path</span></div>
+      <h2>So Fresh and So Clean Clean</h2>
       <p>Every artifact claim on this page so far has been qualitative. <code>QualityMetrics</code> puts a number on
         it: one windowed <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform: converts a signal between the time and frequency domains in O(N log N)">FFT</abbr> of a shifter's output against the known target fundamental, reduced
         to <strong>THD+N</strong> (energy outside the fundamental) and the sharper question, <strong>artifact
@@ -1274,7 +1268,7 @@
   <section class="stage" id="listen">
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--green)"><span class="dot" style="background:var(--green)"></span>06 &middot; listen<span class="stage-tag">deep dive</span></div>
-      <h2>The same clip, four engines, your ears</h2>
+      <h2>Ears Don't Lie</h2>
       <p>Everything above this point is a number or a diagram. This section plays real audio instead, one
         22-second clip corrected into <strong>G major</strong>, run through all four engines. The three C++
         engines, <code>Corrector</code>, <code>PSOLACorrector</code>, and <code>VarispeedCorrector</code>, use
@@ -1315,6 +1309,7 @@
       <audio controls preload="none" style="width:100%;" src="audio/demo-varispeed.mp3"></audio>
     </div>
 
+    <h3>Do You Believe in Life After Bugs?</h3>
     <div class="callout"><strong>TD-PSOLA and Varispeed historically carried real, audible artifacts here,</strong>
       matching the quality-metrics data above (99.18% artifact energy for TD-PSOLA at +12 semitones, a 22-30%
       baseline for Varispeed at every shift). Both were known, actively-investigated limitations of these
@@ -2416,9 +2411,11 @@
 (function(){
   var order = [
     { id: 'engine', label: 'engine' },
-    { id: 'detect', label: 'detect' },
-    { id: 'quantize', label: 'quantize' },
-    { id: 'hotswap', label: 'hot-swap' }
+    { id: 'shift-vocoder', label: 'vocoder' },
+    { id: 'hotswap', label: 'hot-swap' },
+    { id: 'shift-psola', label: 'TD-PSOLA' },
+    { id: 'shift-varispeed', label: 'varispeed' },
+    { id: 'quality', label: 'quality' }
   ];
   var prevBtn = document.getElementById('corePrevBtn');
   var nextBtn = document.getElementById('coreNextBtn');
