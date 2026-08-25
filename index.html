@@ -382,7 +382,7 @@
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--magenta)"><span class="dot" style="background:var(--magenta)"></span>00 &middot; engine<span class="stage-tag core">core path</span></div>
       <h2>If I Could Turn Back Realtime</h2>
-      <div class="plain-english"><strong>Plain English</strong>The part that touches the speakers, moment to moment, has to be instant, no waiting, no pausing to think, or you hear a glitch. So that part only ever moves audio in and out of a queue. All the actual thinking, detecting the pitch, deciding what to do about it, happens on a separate helper that's allowed to take its time.</div>
+      <div class="plain-english"><strong>Plain English</strong>The part that touches the speakers, moment to moment, has to be instant, no waiting, no pausing to think, or you hear a glitch. So that part only ever moves audio in and out of a queue. All the actual thinking, detecting the pitch, deciding what to do about it, happens on a separate helper that isn't held to that razor-thin instant, but it still has to keep up with the flow of incoming audio on average, or sound starts dropping out.</div>
       <p>The <abbr class="ac" tabindex="0" data-tip="Operating System">OS</abbr> calls the audio callback on a hard deadline: one buffer's worth of time. Miss it
         and you hear an audible glitch. So the audio callback only pushes or pops a
         lock-free queue. Detect, quantize, and shift happen on a separate worker thread where we have time for some real math.</p>
