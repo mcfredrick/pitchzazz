@@ -269,6 +269,14 @@
   }
   .callout strong{ color:var(--ink); }
 
+  .plain-english{
+    font-size:16px; color:var(--ink); background:rgba(95,168,255,0.10);
+    border:1px solid rgba(95,168,255,0.4); border-radius:10px; padding:14px 16px;
+    margin:0 0 20px;
+  }
+  .plain-english strong{ color:#5fa8ff; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px;
+    text-transform:uppercase; letter-spacing:0.08em; display:block; margin-bottom:6px; }
+
   /* ---------- interactive demo ---------- */
   .demo-controls{
     display:flex; align-items:center; gap:16px; flex-wrap:wrap;
@@ -372,6 +380,7 @@
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--magenta)"><span class="dot" style="background:var(--magenta)"></span>00 &middot; engine<span class="stage-tag core">core path</span></div>
       <h2>If I Could Turn Back Realtime</h2>
+      <div class="plain-english"><strong>Plain English</strong>The part that touches the speakers, moment to moment, has to be instant, no waiting, no pausing to think, or you hear a glitch. So that part only ever moves audio in and out of a queue. All the actual thinking, detecting the pitch, deciding what to do about it, happens on a separate helper that's allowed to take its time.</div>
       <p>The <abbr class="ac" tabindex="0" data-tip="Operating System">OS</abbr> calls the audio callback on a hard deadline: one buffer's worth of time. Miss it
         and you hear an audible glitch. So the audio callback only pushes or pops a
         lock-free queue. Detect, quantize, and shift happen on a separate worker thread where we have time for some real math.</p>
@@ -488,6 +497,7 @@
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--cyan)"><span class="dot" style="background:var(--cyan)"></span>01 &middot; detect<span class="stage-tag">deep dive</span></div>
       <h2>What's My Pitch Again?</h2>
+      <div class="plain-english"><strong>Plain English</strong>Listen to a short slice of audio and figure out what note is being sung, by checking how well it matches a slightly-delayed copy of itself. Whichever delay lines up best tells you the pitch.</div>
       <p>A pitched sound is <strong>periodic</strong>. Its waveform repeats every T samples, where T is the
         pitch period. Take a copy of the signal, slide it sideways by some lag <abbr class="ac" tabindex="0" data-tip="Tau: the lag, in samples, being tested when sliding a delayed copy of the signal against the original">&tau;</abbr>, and ask whether the copy
         looks like the original again. For almost every <abbr class="ac" tabindex="0" data-tip="Tau: the lag, in samples, being tested when sliding a delayed copy of the signal against the original">&tau;</abbr> the answer is no. But the moment <abbr class="ac" tabindex="0" data-tip="Tau: the lag, in samples, being tested when sliding a delayed copy of the signal against the original">&tau;</abbr> equals the
@@ -555,6 +565,14 @@
       <div class="math-line"><span class="k">3. every <abbr class="ac" tabindex="0" data-tip="Tau: the lag, in samples, being tested when sliding a delayed copy of the signal against the original">&#964;</abbr> at once</span><span class="v">O(&middot;) describes how the <em>worst-case</em> cost grows as input size N grows. Literally sliding a copy and comparing at every <abbr class="ac" tabindex="0" data-tip="Tau: the lag, in samples, being tested when sliding a delayed copy of the signal against the original">&#964;</abbr> costs O(N&sup2;). For this project's N=4096, that's ~16.8 million operations. Computing every <abbr class="ac" tabindex="0" data-tip="Tau: the lag, in samples, being tested when sliding a delayed copy of the signal against the original">&#964;</abbr>'s score at once via <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform: converts a signal between the time and frequency domains in O(N log N)">FFT</abbr> costs O(N&nbsp;log&nbsp;N) instead. 4096&times;log&#8322;(4096) = 4096&times;12 &asymp; 49,000 operations. About 340&times; less work, for the exact same set of numbers.</span></div>
     </div>
 
+    <div class="callout">
+      <strong>Plain English: why bother normalizing at all?</strong> Without it, the score depends on how loud the singing was, not just how good the match is. A loud, clear note and a quiet, breathy one can match their own delayed copy equally well, but the loud one's raw score would look bigger just because there's more signal to work with, not because the match is actually better. Dividing by how much energy was actually available at that moment turns the raw number into something closer to a percentage, how good is this match out of the best possible match right now, so a great match reads as great whether the singer is loud or quiet.
+    </div>
+
+    <div class="callout">
+      <strong>Plain English: why does FFT make this faster?</strong> Checking every possible shift by hand means comparing the whole signal all over again for every single guess, thousands of guesses, thousands of full comparisons, and it adds up fast. FFT answers a completely different-sounding question first, which musical tones make up this sound, and how loud is each one, but that question and "check every possible shift at once" turn out to be the same information in two different disguises. Once the sound's been translated into that tones-and-loudness form, checking every shift at once costs about the same as checking just one shift the slow way. So instead of redoing the slow comparison thousands of times, this project translates into that other form once, does one cheap step while it's there, and translates back once, getting the answer for every shift simultaneously instead of one at a time.
+    </div>
+
     <div class="math-card cyan">
       <div class="mc-label">the math</div>
       <div class="math-line"><span class="k">energy gate</span><span class="v">E&nbsp;=&nbsp;<abbr class="ac" tabindex="0" data-tip="Sigma: summation -- add up the term that follows, over the range implied by context">&Sigma;</abbr>&nbsp;x[n]&sup2;: skip the block entirely if E &lt; 0.15</span></div>
@@ -576,6 +594,7 @@
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--amber)"><span class="dot" style="background:var(--amber)"></span>02 &middot; quantize<span class="stage-tag">deep dive</span></div>
       <h2>Snap Yo Pitches</h2>
+      <div class="plain-english"><strong>Plain English</strong>Take that detected note and, if it's already one of the notes in the chosen scale, leave it alone. If it isn't, nudge it to the nearest note that is.</div>
       <p>Twelve pitch classes, wrapped into an octave. If the detected note is already in the scale, it passes
         through untouched. If not, the search walks outward by semitone. One below, one above, two below,
         two above. Until it lands on one that belongs. This is genuinely two separate steps. A detected
@@ -652,6 +671,7 @@
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--magenta)"><span class="dot" style="background:var(--magenta)"></span>03 &middot; hot-swap<span class="stage-tag core">core path</span></div>
       <h2>HOT TO GO!</h2>
+      <div class="plain-english"><strong>Plain English</strong>Switching which pitch-shifting method is running, live, mid-note, without a click or a dropout. The new method gets ready in the background, then for a brief moment both the old and new methods play at once, faded smoothly from one to the other, so your ear never catches the seam.</div>
       <p>In the actual plugin, swapping from the phase vocoder to <abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add: shifts pitch by re-spacing time-domain grains at pitch marks">TD-PSOLA</abbr> mid-performance is one pick from the
         Engine dropdown, instant, no pause, no click. This section covers the mechanism that makes that possible.
         <strong>One atomic pointer exchange</strong>, picked up by the worker thread between blocks, never
@@ -800,9 +820,19 @@
     <!-- ---- Phase Vocoder ---- -->
     <div class="sub-card on-green" id="shift-vocoder" style="scroll-margin-top:70px;">
       <h3>Phase Vocoder <span class="full-name">(frequency domain)</span></h3>
+      <div class="plain-english"><strong>Plain English</strong>Break the sound into its underlying frequencies, shift every one of them up or down by the same ratio, then rebuild the sound from those shifted frequencies. Careful bookkeeping keeps the rebuild from sounding smeared or underwater.</div>
       <p>Take the signal into the frequency domain with an <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform: converts a signal between the time and frequency domains in O(N log N)">FFT</abbr>, then move each bin's content to a new bin
         scaled by the pitch ratio. Relocating spectral content <strong>is</strong> the pitch shift. The phase
         math below just keeps that relocation sounding coherent instead of smeared.</p>
+
+      <div class="callout">
+        <strong>What's an FFT anyway?</strong> A Fast Fourier Transform takes one block of samples, a little
+        slice of a waveform over time, and re-expresses it as a set of frequency <em>bins</em>: bin k answers
+        "how much of frequency k&middot;sampleRate/N is present in this block?" Each bin's answer is a complex
+        number, magnitude (how much of that frequency) <em>and</em> phase (where in its cycle that frequency
+        sits). An inverse FFT undoes the trip, bins back to a waveform. Nothing here is approximate, it's an
+        exact, reversible change of representation, just a faster way to compute it than the textbook formula.
+      </div>
 
       <figure>
         <div class="fig-frame">
@@ -909,6 +939,7 @@
     <!-- ---- TD-PSOLA ---- -->
     <div class="sub-card on-green" id="shift-psola" style="scroll-margin-top:70px;">
       <h3><abbr class="ac" tabindex="0" data-tip="Time-Domain Pitch-Synchronous Overlap-Add: shifts pitch by re-spacing time-domain grains at pitch marks">TD-PSOLA</abbr> <span class="full-name">(time domain, grain-based)</span></h3>
+      <div class="plain-english"><strong>Plain English</strong>Cut the sound into small pieces timed to the pitch, then paste those same pieces back down closer together or farther apart to raise or lower the pitch, without changing what's actually in each piece.</div>
       <p>No <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform: converts a signal between the time and frequency domains in O(N log N)">FFT</abbr> at all. Cut the signal into small windowed grains, one centered on each detected pitch period,
         then paste them back down at new positions. Closer together to raise pitch, farther apart to lower
         it. Each grain's own content never changes, only its <strong>spacing</strong> does.</p>
@@ -958,6 +989,7 @@
     <!-- ---- Varispeed + WSOLA ---- -->
     <div class="sub-card on-green" id="shift-varispeed" style="scroll-margin-top:70px;">
       <h3>Varispeed + <abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add: time-stretches audio by splicing overlapping windows at the best-correlated offset">WSOLA</abbr> <span class="full-name">(stretch, then resample)</span></h3>
+      <div class="plain-english"><strong>Plain English</strong>Stretch or squeeze the sound's length first without touching its pitch, then play that stretched version back faster or slower to restore the original length. That playback-speed change is what actually shifts the pitch, the same trick as speeding up a tape reel.</div>
       <p>The odd one out: pitch changes by genuinely changing playback rate, like varispeed-ing a tape reel,
         formants included, on purpose. Two stages: <strong><abbr class="ac" tabindex="0" data-tip="Waveform Similarity Overlap-Add: time-stretches audio by splicing overlapping windows at the best-correlated offset">WSOLA</abbr></strong> stretches the signal in
         time, pitch-preserving. A <strong>resample</strong> then plays that stretched signal back at the
@@ -1135,6 +1167,7 @@
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--cyan)"><span class="dot" style="background:var(--cyan)"></span>05 &middot; quality<span class="stage-tag core">core path</span></div>
       <h2>So Fresh and So Clean Clean</h2>
+      <div class="plain-english"><strong>Plain English</strong>Play a known test tone through each shifter and measure how much of the result lands where a clean, correctly-shifted note should, versus how much energy leaks out into noise and unwanted overtones. Two numbers, so a claim like "sounds clean" is backed by an actual measurement, not just an ear.</div>
       <p>Every artifact claim on this page so far has been qualitative. <code>QualityMetrics</code> puts a number on
         it: one windowed <abbr class="ac" tabindex="0" data-tip="Fast Fourier Transform: converts a signal between the time and frequency domains in O(N log N)">FFT</abbr> of a shifter's output against the known target fundamental, reduced
         to <strong>THD+N</strong> (energy outside the fundamental) and the sharper question, <strong>artifact
@@ -1269,6 +1302,7 @@
     <div class="stage-head">
       <div class="stage-eyebrow" style="color:var(--green)"><span class="dot" style="background:var(--green)"></span>06 &middot; listen<span class="stage-tag">deep dive</span></div>
       <h2>Ears Don't Lie</h2>
+      <div class="plain-english"><strong>Plain English</strong>The same recording, corrected, run through all four engines, so you can just listen and compare rather than take any of the numbers above on faith.</div>
       <p>Everything above this point is a number or a diagram. This section plays real audio instead, one
         22-second clip corrected into <strong>G major</strong>, run through all four engines. The three C++
         engines, <code>Corrector</code>, <code>PSOLACorrector</code>, and <code>VarispeedCorrector</code>, use
