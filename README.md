@@ -8,6 +8,8 @@ CLI (`crates/`) and a C++/JUCE plugin (`cpp-plugin/`, AU/VST3/Standalone)
 with three hot-swappable pitch-shift engines (phase vocoder, TD-PSOLA,
 Varispeed + WSOLA) you can switch between live with no audio dropout.
 
+<img src="docs/images/plugin-gui-thumb.png" alt="Pitchzazz plugin GUI: detected/corrected pitch, a scale keyboard visualizer, before/after waveform and spectrum, and per-stage latency breakdown" width="360">
+
 **[Read the illustrated notebook](https://mcfredrick.github.io/pitchzazz/)**
 — every DSP mechanism (windowing, the transforms, the actual math) plus
 the real-time engine and hot-swap architecture, each section linking
